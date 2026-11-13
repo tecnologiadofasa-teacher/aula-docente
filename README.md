@@ -87,7 +87,7 @@ Cuando el colegio usa el módulo de coordinación, los docentes **no** registran
    - **Hoy**: inasistencias del día de todos los cursos, sin importar qué docente tomó la lista; se actualiza cada minuto. Mensaje para el grupo del curso y WhatsApp al acudiente.
    - **Consolidado**: asistencia y uniforme por rango de fechas o por trimestre, con CSV.
    - **Alertas**: estudiantes que superan el porcentaje de inasistencia definido en el SIEE (crítico y preventivo) o que llevan varios días seguidos sin asistir.
-   - **Excusas**: al aprobarlas, las faltas de esas fechas cuentan como justificadas en todas las asignaturas. Los docentes ven que la falta está excusada, pero no el motivo.
+   - **Excusas**: muestra solo los estudiantes que faltaron sin excusa en la fecha elegida, por curso; se excusan uno a uno, marcando varios o con “marcar todos” del curso, y hay una excusa colectiva para un curso completo (salidas pedagógicas, actividades institucionales). Al aprobarlas, las faltas de esas fechas cuentan como justificadas en todas las asignaturas. Los docentes ven que la falta está excusada, pero no el motivo.
    - **Institución**: códigos, miembros y parámetros de alertas.
 
 La coordinación **no** tiene acceso a calificaciones, actividades, evidencias ni al aula virtual de los docentes; la base de datos lo impide. Los estudiantes de un mismo curso registrados por distintos docentes se reconocen por el nombre del curso y el nombre completo (o el documento), así que conviene que todos usen el mismo nombre de curso y la misma lista.

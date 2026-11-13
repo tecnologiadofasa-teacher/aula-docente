@@ -844,6 +844,8 @@ $("#main").addEventListener("change",e=>{
  if(t.id==="co_cur"){CO.curso=t.value;return renderMain();}
  if(t.id==="co_d"||t.id==="co_h"){CO[t.id==="co_d"?"desde":"hasta"]=t.value;t.blur();return renderMain();}
  if(t.id==="co_est"){CO.estado=t.value;return renderMain();}
+ if(t.id==="exf"){CO.exF=t.value||hoy();CO.exSel=new Set();t.blur();return renderMain();}
+ if(t.dataset.exsel){CO.exSel=CO.exSel||new Set();t.checked?CO.exSel.add(t.dataset.exsel):CO.exSel.delete(t.dataset.exsel);return renderMain();}
  if(t.dataset.lsel){CO.lsel=CO.lsel||new Set();t.checked?CO.lsel.add(t.dataset.lsel):CO.lsel.delete(t.dataset.lsel);return renderMain();}
  if(t.id==="l_cur"){CO.lcur=t.value;CO.lsel=new Set();return renderMain();}
  if(t.id==="l_ret"){CO.lret=t.checked;return renderMain();}
@@ -1267,7 +1269,7 @@ function vCoord(){
  if(!INST.cargado)return `<div class="load">Cargando…</div>`;
  if(!esCoord())return altaCoordHTML();
  const tabs=[["hoy","Hoy"],["cons","Consolidado"],["alertas","Alertas"],["excusas","Excusas"],["listas","Listas oficiales"],["inst","Institución"]];
- let rng;if(CO.tab==="hoy")rng=[CO.f,CO.f];else if(CO.tab==="cons"){if(!CO.desde)CO.desde=inicioTrim();rng=[CO.desde,CO.hasta];}else if(CO.tab==="alertas")rng=[inicioTrim(),hoy()];else rng=[hoy(),hoy()];
+ let rng;if(CO.tab==="hoy")rng=[CO.f,CO.f];else if(CO.tab==="cons"){if(!CO.desde)CO.desde=inicioTrim();rng=[CO.desde,CO.hasta];}else if(CO.tab==="alertas")rng=[inicioTrim(),hoy()];else if(CO.tab==="excusas"){CO.exF=CO.exF||hoy();rng=[CO.exF,CO.exF];}else rng=[hoy(),hoy()];
  loadCoord(rng[0],rng[1]);
  let h=`<div class="row" style="margin-bottom:8px"><h2 style="margin:0" class="sp">Coordinación</h2><span class="mut sm">${esc((INST.inst||{}).nombre||"")}</span></div>
  <div class="tabs">${tabs.map(([k,l])=>`<button data-cot="${k}" class="${CO.tab===k?"on":""}">${l}</button>`).join("")}</div>`;
@@ -1291,7 +1293,7 @@ function coHoy(){
   ${b.lista.length?`<div class="list">${b.lista.map(r=>{const det=ev.filter(e=>e.cl===r.cl&&(["falta","justificada","tarde"].includes(e.tipo)||e.marca)).map(e=>`${e.codeNombre&&e.tipo!=="presente"?e.codeNombre:""}${e.marca?(e.codeNombre&&e.tipo!=="presente"?" + ":"")+e.marca:""} (${e.asig})`).filter(x=>!x.startsWith(" ("));
    const todo=r.ses&&r.falta+r.just===r.ses;const w=telWA(r.cl.telefono);
    return `<div class="it"><span class="av s">${r.cl.foto?`<img src="${esc(r.cl.foto)}" class="av s">`:esc(r.cl.nombre.split(" ").map(x=>x[0]).slice(0,2).join(""))}</span><div class="nm"><b>${esc(r.cl.nombre)}</b><span class="mut sm">${esc(det.join(" · "))}</span><div class="row" style="gap:4px;margin-top:3px">${r.falta?`<span class="tag bad">${todo?"No asistió":"Falta en "+r.falta+" de "+r.ses+" clase(s)"}</span>`:""}${r.just?`<span class="tag ok">Con excusa</span>`:""}${r.tarde?`<span class="tag warn">Tarde</span>`:""}${Object.keys(r.marcas).map(m=>`<span class="tag mk2">${esc(m)}</span>`).join("")}</div></div>
-   <div class="row" style="gap:4px;flex-direction:column;align-items:stretch">${w&&r.falta?`<a class="btn sm wa" href="https://wa.me/${w}?text=${encodeURIComponent(msgFamCo(r))}" target="_blank" rel="noopener">WhatsApp</a>`:""}<button class="btn sm" data-co="excusa" data-k="${esc(r.cl.curso+"|"+r.cl.k)}">Excusa</button></div></div>`;}).join("")}</div>
+   <div class="row" style="gap:4px;flex-direction:column;align-items:stretch">${w&&r.falta?`<a class="btn sm wa" href="https://wa.me/${w}?text=${encodeURIComponent(msgFamCo(r))}" target="_blank" rel="noopener">WhatsApp</a>`:""}<button class="btn sm" data-co="exHoy" data-k="${esc(r.cl.curso+"|"+r.cl.k)}">Excusa</button></div></div>`;}).join("")}</div>
    ${aus.length?`<div class="row" style="margin-top:8px"><button class="btn sm pri" data-co="copiarCurso" data-k="${esc(b.cu.n)}">Copiar mensaje del curso</button></div>`:""}`:'<div class="mut sm" style="margin-top:6px">Sin novedades.</div>'}</div>`;}
  if(!bloques.length)h+=`<div class="card empty">Ningún docente ha registrado asistencia ${CO.f===hoy()?"hoy":"en esta fecha"}${CO.curso?" para este curso":""}.</div>`;
  if(sinReg.length)h+=`<div class="mut sm">Sin registro de asistencia en la fecha: ${sinReg.map(esc).join(", ")}.</div>`;
@@ -1325,7 +1327,7 @@ function coAlertas(){const {out,lim,ale,con}=calcAlertas();
 function clDe(key){const [cn,k]=String(key||"").split("|");const cu=CO.cursos[cn];return cu?cu.est.find(c=>c.k===k)||null:null;}
 function coExcusas(){let ex=CO.exc.filter(x=>(!CO.curso||x.curso===CO.curso)&&(!CO.estado||x.estado===CO.estado));
  const cn=c=>(CO.cursos[c]||{}).nombre||c;
- return `<div class="row" style="margin-bottom:10px">${filtroCurso()}<select id="co_est" style="flex:0 1 150px"><option value="">Todos los estados</option>${["pendiente","aprobada","rechazada"].map(s=>`<option value="${s}" ${CO.estado===s?"selected":""}>${s[0].toUpperCase()+s.slice(1)}</option>`).join("")}</select><button class="btn pri" data-co="excusa">+ Registrar excusa</button></div>
+ return faltasHTML()+`<h3 style="margin:4px 0 8px">Excusas registradas</h3><div class="row" style="margin-bottom:10px">${filtroCurso()}<select id="co_est" style="flex:0 1 150px"><option value="">Todos los estados</option>${["pendiente","aprobada","rechazada"].map(s=>`<option value="${s}" ${CO.estado===s?"selected":""}>${s[0].toUpperCase()+s.slice(1)}</option>`).join("")}</select></div>
  <div class="mut sm" style="margin-bottom:8px">Al aprobar una excusa, las faltas de esas fechas cuentan como justificadas en todas las asignaturas del estudiante. Los docentes no ven el motivo.</div>
  ${ex.length?`<div class="card"><div class="list">${ex.map(x=>`<div class="it"><div class="nm"><b>${esc(x.est_nombre)}</b><span class="mut sm">Curso ${esc(cn(x.curso))} · ${fFecha(x.desde)}${x.hasta!==x.desde?" a "+fFecha(x.hasta):""}${x.motivo?" · "+esc(x.motivo):""}</span>${x.soporte?`<div class="files"><a href="${esc(x.soporte)}" target="_blank" rel="noopener">Soporte</a></div>`:""}<div style="margin-top:3px"><span class="tag ${x.estado==="aprobada"?"ok":x.estado==="rechazada"?"bad":"warn"}">${esc(x.estado)}</span></div></div>
   <div class="row" style="gap:4px;flex-direction:column;align-items:stretch">${x.estado!=="aprobada"?`<button class="btn sm pri" data-co="aprobar" data-id="${x.id}">Aprobar</button>`:""}${x.estado==="pendiente"?`<button class="btn sm" data-co="rechazar" data-id="${x.id}">Rechazar</button>`:""}<button class="btn sm" data-co="editExc" data-id="${x.id}">Editar</button></div></div>`).join("")}</div></div>`:`<div class="card empty">No hay excusas registradas.</div>`}`;}
@@ -1372,6 +1374,12 @@ async function accionCo(op,el){
   case"rper":CO.desde=el.dataset.a;CO.hasta=el.dataset.b;return renderMain();
   case"copiarCurso":return copiar(msgCursoCo(el.dataset.k));
   case"excusa":return formExcusa(null,el.dataset.k);
+  case"exHoy":{const cl=clDe(el.dataset.k);if(!cl)return;CO.exF=CO.f;return formExcusaMasiva([cl]);}
+  case"exUno":{const cl=clDe(el.dataset.k);return cl?formExcusaMasiva([cl]):null;}
+  case"exMasiva":return formExcusaMasiva([...CO.exSel].map(clDe).filter(Boolean));
+  case"exNinguno":CO.exSel=new Set();return renderMain();
+  case"exColectiva":return formExcusaCurso();
+  case"exSelCur":{const b=faltasDia(CO.exF).find(x=>x.cu.n===el.dataset.k);if(!b)return;const ks=b.lista.map(r=>keyCl(r.cl));const todos=ks.every(k=>CO.exSel.has(k));ks.forEach(k=>todos?CO.exSel.delete(k):CO.exSel.add(k));return renderMain();}
   case"editExc":return formExcusa(CO.exc.find(x=>x.id===el.dataset.id));
   case"aprobar":case"rechazar":{const {error}=await sb.from("excusas").update({estado:op==="aprobar"?"aprobada":"rechazada",updated_at:new Date().toISOString()}).eq("id",el.dataset.id);if(error)return toast(avErr(error),true);toast(op==="aprobar"?"Excusa aprobada":"Excusa rechazada");return loadCoord(r[0],r[1],true);}
   case"csvCons":{const {pe,cs,marcas}=CO._cons;const rows=[["Curso","Estudiante","Clases","Fallas","Justificadas","Tardes","% asistencia","Días sin asistir",...marcas]];
@@ -1542,6 +1550,37 @@ async function moverEstudiantes(){const ids=[...(CO.lsel||[])];const dest=($("#l
 async function retirarEstudiantes(){const ids=[...(CO.lsel||[])];if(!ids.length)return;if(!await ask(`¿Marcar ${ids.length} estudiante(s) como retirados? Dejarán de aparecer en las listas de los docentes; su historial se conserva.`,"Retirar",true))return;
  const rows=OF.ests.filter(e=>ids.includes(e.id)).map(e=>{const {updated_at,created_at,...r}=e;return {...r,activo:false};});const {error}=await sb.from("inst_estudiantes").upsert(rows);if(error)return toast(avErr(error),true);CO.lsel=new Set();await loadOficial(true);CO.baseAt=0;sched();}
 function rebalancearPesos(sh){const ins=$$(".rows .r [data-k=peso]",sh);const n=ins.length;if(!n)return;const b=Math.floor(1000/n)/10;ins.forEach((x,i)=>{x.value=i<n-1?b:Math.round((100-b*(n-1))*10)/10;});}
+
+/* ---------- EXCUSAS RÁPIDAS ---------- */
+function faltasDia(f){const ev=eventosCo(f,f).filter(e=>e.tipo==="falta");const m=new Map();for(const e of ev){let r=m.get(e.cl);if(!r){r={cl:e.cl,asigs:[]};m.set(e.cl,r);}if(!r.asigs.includes(e.asig))r.asigs.push(e.asig);}
+ const porCurso={};for(const r of m.values())(porCurso[r.cl.curso]=porCurso[r.cl.curso]||[]).push(r);
+ return cursosCo().filter(c=>porCurso[c.n]).map(c=>({cu:c,lista:porCurso[c.n].sort((a,b)=>a.cl.nombre.localeCompare(b.cl.nombre,"es"))}));}
+const keyCl=cl=>cl.curso+"|"+cl.k;
+function faltasHTML(){const f=CO.exF||(CO.exF=hoy());CO.exSel=CO.exSel||new Set();const bl=faltasDia(f);const tot=bl.reduce((s,b)=>s+b.lista.length,0);
+ return `<div class="card"><div class="row" style="margin-bottom:8px"><h3 class="sp" style="margin:0">Faltas sin excusa</h3><input type="date" id="exf" value="${f}" style="flex:0 1 160px"></div>
+ ${tot?`<div class="mut sm" style="margin-bottom:8px">${tot} estudiante(s) faltaron sin excusa ${f===hoy()?"hoy":"el "+fFecha(f)}. Marca los que presentaron excusa o usa “Excusar” en cada uno.</div>
+ ${CO.exSel.size?`<div class="banner i row" style="gap:6px"><b class="sm sp">${CO.exSel.size} seleccionado(s)</b><button class="btn sm pri" data-co="exMasiva">Excusar seleccionados</button><button class="btn sm" data-co="exNinguno">Quitar selección</button></div>`:""}
+ ${bl.map(b=>`<div style="margin-top:10px"><div class="row"><b class="sm sp">Curso ${esc(b.cu.nombre)} · ${b.lista.length}</b><button class="lnk sm" data-co="exSelCur" data-k="${esc(b.cu.n)}">${b.lista.every(r=>CO.exSel.has(keyCl(r.cl)))?"quitar todos":"marcar todos"}</button></div>
+  <div class="list">${b.lista.map(r=>`<div class="it"><input type="checkbox" data-exsel="${esc(keyCl(r.cl))}" ${CO.exSel.has(keyCl(r.cl))?"checked":""} style="width:18px;height:18px"><div class="nm"><b>${esc(r.cl.nombre)}</b><span class="mut sm">Falta en ${esc(r.asigs.join(", "))}${r.cl.acudiente?" · "+esc(r.cl.acudiente):""}</span></div><button class="btn sm" data-co="exUno" data-k="${esc(keyCl(r.cl))}">Excusar</button></div>`).join("")}</div></div>`).join("")}`
+ :`<div class="mut sm">${eventosCo(f,f).length?"No hay faltas sin excusa en esta fecha.":"Ningún docente ha registrado asistencia en esta fecha."}</div>`}</div>
+ <div class="row" style="margin-bottom:12px"><button class="btn" data-co="exColectiva">Excusa para un curso completo</button><button class="btn" data-co="excusa">+ Otra excusa</button></div>`;}
+function formExcusaMasiva(cls,titulo){if(!cls.length)return;const f=CO.exF||hoy();
+ openModal(`<div class="hd"><h3>${esc(titulo||(cls.length===1?"Excusar a "+cls[0].nombre:"Excusar a "+cls.length+" estudiantes"))}</h3><button class="x" data-close>×</button></div>
+ ${cls.length>1?`<div class="sm mut" style="margin-bottom:10px;max-height:110px;overflow:auto">${cls.map(c=>esc(c.nombre)+" ("+esc(c.cursoNombre)+")").join(" · ")}</div>`:`<div class="sm mut" style="margin-bottom:10px">Curso ${esc(cls[0].cursoNombre)}</div>`}
+ <div class="f2"><label class="f">Desde<input type="date" id="em_d" value="${f}"></label><label class="f">Hasta<input type="date" id="em_h" value="${f}"></label></div>
+ <label class="f">Motivo<input type="text" id="em_m" placeholder="Ej.: cita médica, calamidad doméstica, salida pedagógica" list="em_ml"><datalist id="em_ml"><option>Cita médica</option><option>Enfermedad</option><option>Calamidad doméstica</option><option>Salida pedagógica</option><option>Actividad institucional</option><option>Representación del colegio</option></datalist></label>
+ <label class="f">Enlace al soporte (opcional)<input type="url" id="em_s" placeholder="https://drive.google.com/…"></label>
+ <label class="chk"><input type="checkbox" id="em_ap" checked><span>Aprobar de inmediato (las faltas quedan justificadas en todas las asignaturas)</span></label>
+ <div class="ft"><button class="btn pri" id="em_ok">Guardar ${cls.length>1?cls.length+" excusas":"excusa"}</button></div>`,sh=>{
+  $("#em_ok",sh).onclick=async ev=>{const d=$("#em_d").value,hh=$("#em_h").value||d;if(!d||hh<d)return toast("Revisa las fechas.",true);ev.target.disabled=true;
+   const comun={inst_id:INST.m.inst_id,desde:d,hasta:hh,motivo:$("#em_m").value.trim(),soporte:$("#em_s").value.trim(),estado:$("#em_ap").checked?"aprobada":"pendiente"};
+   const rows=cls.map(c=>({...comun,curso:c.curso,est_key:c.k,est_doc:c.d||"",est_id:c.id||"",est_nombre:c.nombre}));
+   for(let i=0;i<rows.length;i+=300){const {error}=await sb.from("excusas").insert(rows.slice(i,i+300));if(error){ev.target.disabled=false;return toast(avErr(error),true);}}
+   CO.exSel=new Set();closeModal();toast(rows.length===1?"Excusa registrada":rows.length+" excusas registradas");await loadCoord(CO.rango[0],CO.rango[1],true);};});}
+function formExcusaCurso(){const cs=cursosCo();if(!cs.length)return toast("No hay cursos.",true);
+ openModal(`<div class="hd"><h3>Excusa para un curso completo</h3><button class="x" data-close>×</button></div><p class="sm mut">Útil para salidas pedagógicas, actividades institucionales o representaciones del colegio. Se registra una excusa para cada estudiante activo del curso.</p>
+ <label class="f">Curso<select id="ec_c">${cs.map(c=>`<option value="${esc(c.n)}">${esc(c.nombre)} (${c.est.length})</option>`).join("")}</select></label><div class="ft"><button class="btn pri" id="ec_ok">Continuar</button></div>`,sh=>{
+  $("#ec_ok",sh).onclick=()=>{const cu=CO.cursos[$("#ec_c").value];if(!cu||!cu.est.length)return toast("El curso no tiene estudiantes.",true);formExcusaMasiva(cu.est,`Excusa para el curso ${cu.nombre} (${cu.est.length} estudiantes)`);};});}
 
 /* ---------- PORTAL DEL ESTUDIANTE ---------- */
 const PT={mats:[],pubs:[],err:"",loading:false,filtro:"",unirse:false,join:null,joinErr:"",q:""};let joinPend=null;
