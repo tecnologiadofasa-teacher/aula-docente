@@ -53,6 +53,14 @@ La aplicación solicita el permiso `drive.file`, que solo da acceso a los archiv
 
 En **Ajustes → Horario de clases** se registran los bloques de la semana (día, hora, curso, asignatura y aula). La vista **Semana** los muestra como calendario; al tocar una clase se abre su panel con acceso directo a la asistencia de ese día, las calificaciones, las evidencias, el aula virtual y las observaciones de la clase (tema y novedades).
 
+## Calificaciones
+
+- **Ajustes → Estructura de la nota** define los ítems y porcentajes por defecto (Actividades 70 %, Evaluación trimestral 20 %, Autoevaluación 10 %). Se pueden agregar otros ítems y aplicar la estructura a todas las asignaturas; cada asignatura puede ajustarse aparte.
+- En la planilla, los ítems sin casillas muestran **+ Agregar** para crear su columna con un toque (por ejemplo, la evaluación trimestral).
+- **Ajustes → Escala de valoración** define los niveles de desempeño, sus rangos y su color; las notas se colorean según el nivel.
+- **Estadísticas** (en Calificaciones) muestra un gráfico circular por nivel de desempeño, promedio, mediana, nota más alta y más baja y porcentaje de aprobación, del periodo o del acumulado anual, para un curso o todos los cursos de la asignatura. Se descarga como imagen.
+- **Ajustes → Periodos académicos** incluye accesos rápidos para 3 trimestres o 4 periodos.
+
 ## Aula virtual y acceso de estudiantes
 
 1. En **Aula virtual**, genera un código para cada clase (curso + asignatura) y usa **Copiar invitación** para enviarlo por WhatsApp o correo.

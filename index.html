@@ -166,6 +166,10 @@ body.nologin #gear{display:none}
 .pub{border-bottom:1px solid var(--line);padding:10px 0}.pub:last-child{border-bottom:0}
 .nombres{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto}.nombres button{text-align:left;border:1px solid var(--line);background:#fff;border-radius:9px;padding:11px 12px;font-size:15px;cursor:pointer}.nombres button:hover:not(:disabled){border-color:var(--pri);background:var(--pri2)}.nombres button:disabled{color:var(--mut);background:#f6f7f8;cursor:default}
 .pickbox{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px 8px;margin-bottom:10px}
+.dtag{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ink);white-space:nowrap}.dtag i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.rows input[type=color]{padding:2px;height:34px;cursor:pointer}
+.stt{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:12px 0}.stt div{border:1px solid var(--line);border-radius:10px;padding:8px 10px}.stt b{display:block;font-size:20px}.stt span{font-size:12px;color:var(--mut)}
+.pie path:hover,.pie circle:hover{opacity:.85}
 .load{display:flex;align-items:center;justify-content:center;min-height:50vh;color:var(--mut);flex-direction:column;gap:8px;text-align:center;padding:20px}
 </style>
 </head>
@@ -217,7 +221,8 @@ let dirty=false;
 
 function DEF(){const y=new Date().getFullYear();return{docente:"",institucion:"",anio:String(y),alertaFallas:3,
  periodos:[1,2,3,4].map(i=>({id:"p"+i,nombre:"Periodo "+i,inicio:"",fin:"",peso:25})),
- escala:{min:1,max:5,aprob:3,dec:1,desempenos:[{nombre:"Bajo",desde:1,hasta:2.9},{nombre:"Básico",desde:3,hasta:3.9},{nombre:"Alto",desde:4,hasta:4.5},{nombre:"Superior",desde:4.6,hasta:5}]},
+ escala:{min:1,max:5,aprob:3,dec:1,desempenos:[{nombre:"Bajo",desde:1,hasta:2.9,color:"#c0392b"},{nombre:"Básico",desde:3,hasta:3.9,color:"#d68910"},{nombre:"Alto",desde:4,hasta:4.5,color:"#2e86c1"},{nombre:"Superior",desde:4.6,hasta:5,color:"#1e8449"}]},
+ plantilla:[{id:"act",nombre:"Actividades",peso:70},{id:"evt",nombre:"Evaluación trimestral",peso:20},{id:"aut",nombre:"Autoevaluación",peso:10}],
  codigos:[{c:"P",nombre:"Presente",tipo:"presente"},{c:"A",nombre:"Falta",tipo:"falta"},{c:"T",nombre:"Llegada tarde",tipo:"tarde"},{c:"E",nombre:"Falta con excusa",tipo:"justificada"}],
  drive:{rootId:"",carpetas:{}}};}
 const _def=DEF();
@@ -337,6 +342,11 @@ function promComp(eid,acts,cid){let s=0,w=0;for(const x of acts)if(x.compId===ci
 function notaPer(eid,cid,aid,pid){const acts=actsDe(cid,aid,pid);let s=0,w=0;for(const c of comps(S.asigs[aid])){const m=promComp(eid,acts,c.id);if(m!=null){s+=m*(+c.peso||0);w+=(+c.peso||0);}}return w?s/w:null;}
 function notaAcum(eid,cid,aid){let s=0,w=0;for(const p of cfg().periodos){const n=notaPer(eid,cid,aid,p.id);if(n!=null){s+=n*(+p.peso||0);w+=(+p.peso||0);}}return w?s/w:null;}
 function desemp(n){if(n==null)return"";const r=rnd(n);const d=(cfg().escala.desempenos||[]).find(d=>r>=+d.desde-1e-9&&r<=+d.hasta+1e-9);return d?d.nombre:"";}
+const DESCOL=["#c0392b","#d68910","#2e86c1","#1e8449","#7d3c98","#117a65"];
+function niveles(){return (cfg().escala.desempenos||[]).map((d,i)=>({...d,color:/^#[0-9a-f]{6}$/i.test(d.color||"")?d.color:DESCOL[i%DESCOL.length]})).sort((a,b)=>+a.desde-+b.desde);}
+function nivelDe(n){if(n==null)return null;const r=rnd(n);return niveles().find(d=>r>=+d.desde-1e-9&&r<=+d.hasta+1e-9)||null;}
+const tinte=n=>{const d=nivelDe(n);return d?`background:${d.color}26;`:"";};
+const desTag=n=>{const d=nivelDe(n);return d?`<span class="dtag"><i style="background:${d.color}"></i>${esc(d.nombre)}</span>`:"";};
 const aprueba=n=>n==null?null:rnd(n)>=+cfg().escala.aprob;
 const codTipo=c=>((cfg().codigos.find(x=>x.c===c))||{}).tipo||"registro";
 const asisKey=(cid,aid,f)=>`${cid}__${aid}__${f}`;
@@ -454,7 +464,7 @@ function fichaEst(id){
  <div class="row" style="gap:16px;align-items:flex-start">${av(e,"l")}<div class="sp"><div style="font-size:18px;font-weight:700">${esc(nomEst(e))}</div><div class="mut">${esc(cur?cur.nombre:"Sin curso")}${e.activo===false?' · <span class="tag bad">Retirado</span>':""}</div>
  <dl class="kv" style="margin-top:8px"><dt>Documento</dt><dd>${esc(e.tipoDoc||"")} ${esc(e.documento||"—")}</dd>${e.nacimiento?`<dt>Nacimiento</dt><dd>${fFecha(e.nacimiento)}</dd>`:""}<dt>Acudiente</dt><dd>${esc(e.acudiente||"—")}</dd>${e.telefono?`<dt>Teléfono</dt><dd>${esc(e.telefono)}</dd>`:""}${e.correo?`<dt>Correo</dt><dd>${esc(e.correo)}</dd>`:""}<dt>Autorización</dt><dd>${e.autorizacion?'<span class="tag ok">Registrada</span>':'<span class="tag warn">Pendiente</span>'}</dd></dl></div></div>
  ${e.obs?`<div class="banner i" style="margin-top:12px">${esc(e.obs)}</div>`:""}
- <h3 style="margin-top:16px">Valoraciones</h3>${as.length?`<div class="tw" style="max-height:none"><table class="g"><thead><tr><th class="st">Asignatura</th>${ps.map(p=>`<th>${esc(p.nombre)}</th>`).join("")}<th>Acum.</th><th>Fallas</th></tr></thead><tbody>${as.map(a=>{const ac=notaAcum(id,e.cursoId,a.id);const r=resAsis(id,e.cursoId,a.id);return `<tr><td class="st">${esc(a.nombre)}</td>${ps.map(p=>{const n=notaPer(id,e.cursoId,a.id,p.id);return `<td style="${aprueba(n)===false?"color:var(--bad);font-weight:700":""}">${fmt(n)}</td>`;}).join("")}<td class="def">${fmt(ac)}<div class="mut" style="font-size:11px;font-weight:400">${esc(desemp(ac))}</div></td><td>${r.falta}${r.just?` <span class="mut">(+${r.just} J)</span>`:""}</td></tr>`;}).join("")}</tbody></table></div>`:'<div class="mut sm">Sin asignaturas para este curso.</div>'}
+ <h3 style="margin-top:16px">Valoraciones</h3>${as.length?`<div class="tw" style="max-height:none"><table class="g"><thead><tr><th class="st">Asignatura</th>${ps.map(p=>`<th>${esc(p.nombre)}</th>`).join("")}<th>Acum.</th><th>Fallas</th></tr></thead><tbody>${as.map(a=>{const ac=notaAcum(id,e.cursoId,a.id);const r=resAsis(id,e.cursoId,a.id);return `<tr><td class="st">${esc(a.nombre)}</td>${ps.map(p=>{const n=notaPer(id,e.cursoId,a.id,p.id);return `<td style="${tinte(n)}">${fmt(n)}</td>`;}).join("")}<td class="def" style="${tinte(ac)}">${fmt(ac)}<div style="font-size:11px;font-weight:400">${esc(desemp(ac))}</div></td><td>${r.falta}${r.just?` <span class="mut">(+${r.just} J)</span>`:""}</td></tr>`;}).join("")}</tbody></table></div>`:'<div class="mut sm">Sin asignaturas para este curso.</div>'}
  <h3 style="margin-top:16px">Evidencias</h3>${evs.length?`<div class="list">${evs.slice(0,12).map(v=>`<div class="it"><div class="nm"><b>${esc(v.titulo)}</b><span class="mut sm">${fFecha(v.fecha)} · ${esc((S.asigs[v.asigId]||{}).nombre||"")}</span><div class="files">${(v.archivos||[]).map(a=>a.link?`<a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.nombre)}</a>`:"").join("")}</div></div></div>`).join("")}</div>`:'<div class="mut sm">Sin evidencias asociadas.</div>'}
  <div class="ft"><button class="btn pri" id="fe_ed">Editar</button></div>`,sh=>{$("#fe_ed",sh).onclick=()=>formEst(e);});
 }
@@ -496,22 +506,23 @@ function vNotas(){
  const es=estsCurso(cur.id),acts=actsDe(cur.id,as.id,per.id),cs=comps(as),E=cfg().escala;
  const grupos=cs.map(c=>({c,acts:acts.filter(a=>a.compId===c.id)}));
  const huerf=acts.filter(a=>!cs.some(c=>c.id===a.compId));
- let h=`<div class="row" style="margin-bottom:10px"><h2 style="margin:0" class="sp">Calificaciones</h2>${downloads?`<button class="btn sm" data-go="csvNotas">Exportar CSV</button>`:""}<button class="btn pri" data-go="act">+ Actividad</button></div>
+ let h=`<div class="row" style="margin-bottom:10px"><h2 style="margin:0" class="sp">Calificaciones</h2><button class="btn sm" data-go="stats">Estadísticas</button>${downloads?`<button class="btn sm" data-go="csvNotas">Exportar CSV</button>`:""}<button class="btn pri" data-go="act">+ Actividad</button></div>
  <div class="card sm"><div class="row"><div class="sp"><b>${esc(as.nombre)}</b> · ${esc(cur.nombre)} · ${esc(per.nombre)} (${esc(per.peso)}% del año)</div><button class="lnk sm" data-go="editAsig">Editar componentes</button></div>
  <div class="mut" style="margin-top:4px">${cs.map(c=>`${esc(c.nombre)} ${esc(c.peso)}%`).join(" · ")} · Escala ${esc(E.min)} a ${esc(E.max)}, aprueba con ${esc(E.aprob)}</div>
+ <div class="row" style="margin-top:8px;gap:10px">${niveles().map(d=>`<span class="dtag"><i style="background:${d.color}"></i>${esc(d.nombre)} ${esc(d.desde)}–${esc(d.hasta)}</span>`).join("")}</div>
  <label class="chk" style="margin:8px 0 0"><input type="checkbox" id="showComp" ${UI.showComp?"checked":""}><span>Mostrar promedio de cada componente</span></label></div>`;
  if(huerf.length)h+=`<div class="banner">${huerf.length} actividad(es) pertenecen a un componente que ya no existe y no se están promediando. Ábrelas para asignarles un componente.</div>`;
  if(!es.length)return h+`<div class="card empty">No hay estudiantes en ${esc(cur.nombre)}.</div>`;
  if(!acts.length)h+=`<div class="banner i">Aún no hay actividades en este periodo. Crea la primera con “+ Actividad”.</div>`;
- const g2=grupos.filter(g=>g.acts.length||UI.showComp);
- h+=`<div class="tw"><table class="g" id="tg"><thead><tr><th class="st" rowspan="2">Estudiante</th>${g2.map(g=>`<th colspan="${g.acts.length+(UI.showComp?1:0)||1}">${esc(g.c.nombre)} ${esc(g.c.peso)}%</th>`).join("")}${huerf.length?`<th colspan="${huerf.length}">Sin componente</th>`:""}<th rowspan="2">Def.<br>${esc(per.nombre)}</th><th rowspan="2">Desempeño</th><th rowspan="2">Acumulado<br>año</th></tr>
- <tr>${g2.map(g=>(g.acts.length?g.acts.map(a=>`<th><span class="acth" data-act="${a.id}" title="${esc(a.nombre)}">${esc(a.nombre)}</span><div class="mut" style="font-weight:400;font-size:11px">${a.fecha?fFecha(a.fecha).slice(0,5):""}${(+a.peso||1)!==1?" · x"+esc(a.peso):""}</div>${evBadge(a.id)}</th>`).join(""):(UI.showComp?"":"<th>—</th>"))+(UI.showComp?`<th class="mut">Prom.</th>`:"")).join("")}${huerf.map(a=>`<th><span class="acth" data-act="${a.id}">${esc(a.nombre)}</span>${evBadge(a.id)}</th>`).join("")}</tr></thead><tbody>`;
+ const g2=grupos;
+ h+=`<div class="tw"><table class="g" id="tg"><thead><tr><th class="st" rowspan="2">Estudiante</th>${g2.map(g=>`<th colspan="${Math.max(1,g.acts.length)+(UI.showComp?1:0)}">${esc(g.c.nombre)} ${esc(g.c.peso)}%</th>`).join("")}${huerf.length?`<th colspan="${huerf.length}">Sin componente</th>`:""}<th rowspan="2">Def.<br>${esc(per.nombre)}</th><th rowspan="2">Desempeño</th><th rowspan="2">Acumulado<br>año</th></tr>
+ <tr>${g2.map(g=>(g.acts.length?g.acts.map(a=>`<th><span class="acth" data-act="${a.id}" title="${esc(a.nombre)}">${esc(a.nombre)}</span><div class="mut" style="font-weight:400;font-size:11px">${a.fecha?fFecha(a.fecha).slice(0,5):""}${(+a.peso||1)!==1?" · x"+esc(a.peso):""}</div>${evBadge(a.id)}</th>`).join(""):`<th><button class="btn sm" data-qact="${esc(g.c.id)}" title="Crear la casilla de ${esc(g.c.nombre)}">+ Agregar</button></th>`)+(UI.showComp?`<th class="mut">Prom.</th>`:"")).join("")}${huerf.map(a=>`<th><span class="acth" data-act="${a.id}">${esc(a.nombre)}</span>${evBadge(a.id)}</th>`).join("")}</tr></thead><tbody>`;
  for(const e of es){
   h+=`<tr data-row="${e.id}"><td class="st"><span class="row" style="flex-wrap:nowrap;gap:6px">${av(e,"s")}<span style="overflow:hidden;text-overflow:ellipsis">${esc(nomEst(e))}</span></span></td>`;
-  for(const g of g2){h+=g.acts.length?g.acts.map(a=>cell(a,e)).join(""):(UI.showComp?"":"<td></td>");if(UI.showComp)h+=`<td class="mut" data-cp="${g.c.id}">${fmt(promComp(e.id,acts,g.c.id))}</td>`;}
+  for(const g of g2){h+=g.acts.length?g.acts.map(a=>cell(a,e)).join(""):"<td></td>";if(UI.showComp)h+=`<td class="mut" data-cp="${g.c.id}">${fmt(promComp(e.id,acts,g.c.id))}</td>`;}
   h+=huerf.map(a=>cell(a,e)).join("");
   const n=notaPer(e.id,cur.id,as.id,per.id),ac=notaAcum(e.id,cur.id,as.id);
-  h+=`<td class="def" data-def style="${aprueba(n)===false?"color:var(--bad)":""}">${fmt(n)}</td><td data-des class="sm">${esc(desemp(n))}</td><td data-acu>${fmt(ac)}</td></tr>`;
+  h+=`<td class="def" data-def style="${tinte(n)}">${fmt(n)}</td><td data-des class="sm">${desTag(n)}</td><td data-acu style="${tinte(ac)}">${fmt(ac)}</td></tr>`;
  }
  h+=`</tbody></table></div><div class="mut sm" style="margin-top:8px">Escribe la nota y pasa a la siguiente casilla (Enter baja a la fila siguiente). Se guarda automáticamente. La definitiva se calcula con los componentes que ya tienen notas y con el peso de cada actividad dentro de su componente.</div>`;
  return h;
@@ -530,9 +541,9 @@ function evAct(id){const a=S.acts[id];if(!a)return;const evs=evsAct(id);
   $("#ea_go",sh).onclick=()=>{const e=$("#ea_est").value;if(e)formEv(null,{actId:id,todos:false,estIds:[e]});};
   sh.addEventListener("click",ev=>{const b=ev.target.closest("[data-ev-ed]");if(b)formEv(S.evid[b.dataset.evEd]);});
  });}
-function cell(a,e){const v=((S.notas[a.id]||{}).n||{})[e.id];const n=num(v);return `<td><input inputmode="decimal" data-n="${a.id}" data-e="${e.id}" value="${v==null?"":esc(v)}" class="${n!=null&&aprueba(n)===false?"low":""}"></td>`;}
+function cell(a,e){const v=((S.notas[a.id]||{}).n||{})[e.id];const n=num(v);return `<td><input inputmode="decimal" data-n="${a.id}" data-e="${e.id}" value="${v==null?"":esc(v)}" style="${tinte(n)}"></td>`;}
 function actualizarFila(eid){const tr=$(`tr[data-row="${eid}"]`);if(!tr)return;const n=notaPer(eid,ctx.c,ctx.a,ctx.p),ac=notaAcum(eid,ctx.c,ctx.a);
- const d=$("[data-def]",tr);d.textContent=fmt(n);d.style.color=aprueba(n)===false?"var(--bad)":"";$("[data-des]",tr).textContent=desemp(n);$("[data-acu]",tr).textContent=fmt(ac);
+ const d=$("[data-def]",tr);d.textContent=fmt(n);d.setAttribute("style",tinte(n));$("[data-des]",tr).innerHTML=desTag(n);const u=$("[data-acu]",tr);u.textContent=fmt(ac);u.setAttribute("style",tinte(ac));
  const acts=actsDe(ctx.c,ctx.a,ctx.p);$$("[data-cp]",tr).forEach(td=>{td.textContent=fmt(promComp(eid,acts,td.dataset.cp));});}
 function formAct(a){
  const as=S.asigs[ctx.a],cur=S.cursos[ctx.c];if(!as||!cur)return toast("Selecciona curso y asignatura.",true);
@@ -654,8 +665,9 @@ function vAjustes(){
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Cursos</h3><button class="btn sm pri" data-go="curso">+ Curso</button></div><div class="list">${cursosArr().map(x=>`<div class="it"><div class="nm"><b>${esc(x.nombre)}</b><span class="mut sm">${esc([x.grado?"Grado "+x.grado:"",x.jornada,x.director?"Director: "+x.director:""].filter(Boolean).join(" · "))} · ${estsCurso(x.id).length} estudiantes</span></div><button class="btn sm" data-curso="${x.id}">Editar</button></div>`).join("")||'<div class="mut sm">Sin cursos.</div>'}</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Asignaturas y forma de calificar</h3><button class="btn sm pri" data-go="asig">+ Asignatura</button></div><div class="list">${Object.values(S.asigs).sort(byName).map(a=>`<div class="it"><div class="nm"><b>${esc(a.nombre)}</b><span class="mut sm">${esc((a.cursoIds||[]).map(i=>(S.cursos[i]||{}).nombre).filter(Boolean).join(", ")||"Sin cursos")} · ${esc(comps(a).map(k=>k.nombre+" "+k.peso+"%").join(", "))}</span></div><button class="btn sm" data-asig="${a.id}">Editar</button></div>`).join("")||'<div class="mut sm">Sin asignaturas.</div>'}</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Horario de clases</h3><button class="btn sm" data-go="horario">Editar</button></div><div class="sm mut" style="margin-top:6px">${horario().length?[1,2,3,4,5,6].map(d=>{const n=horario().filter(s=>+s.dia===d).length;return n?`${DIA3[d]}: ${n}`:"";}).filter(Boolean).join(" · ")+` · ${horario().length} clases por semana`:"Sin horario registrado."}</div></div>
+ <div class="card"><div class="row"><h3 class="sp" style="margin:0">Estructura de la nota</h3><button class="btn sm" data-go="plantilla">Editar</button></div><div class="row" style="margin-top:6px">${(cfg().plantilla||_def.plantilla).map(k=>`<span class="tag">${esc(k.nombre)} ${esc(k.peso)}%</span>`).join("")}</div><div class="sm mut" style="margin-top:6px">Se usa al crear asignaturas; cada asignatura puede ajustarse aparte.</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Periodos académicos</h3><button class="btn sm" data-go="periodos">Editar</button></div>${sumP!==100?`<div class="banner" style="margin:8px 0 0">Los pesos suman ${sumP}%. El acumulado se normaliza, pero conviene que sumen 100%.</div>`:""}<div class="list">${c.periodos.map(p=>`<div class="it"><div class="nm"><b>${esc(p.nombre)}</b><span class="mut sm">${p.inicio?fFecha(p.inicio)+" a "+fFecha(p.fin):"Sin fechas"}</span></div><span class="tag">${esc(p.peso)}%</span></div>`).join("")}</div></div>
- <div class="card"><div class="row"><h3 class="sp" style="margin:0">Escala de valoración</h3><button class="btn sm" data-go="escala">Editar</button></div><div class="sm" style="margin-top:6px">De ${esc(E.min)} a ${esc(E.max)} · aprueba con ${esc(E.aprob)} · ${esc(E.dec)} decimal(es)</div><div class="row" style="margin-top:6px">${(E.desempenos||[]).map(d=>`<span class="tag">${esc(d.nombre)} ${esc(d.desde)}–${esc(d.hasta)}</span>`).join("")}</div></div>
+ <div class="card"><div class="row"><h3 class="sp" style="margin:0">Escala de valoración</h3><button class="btn sm" data-go="escala">Editar</button></div><div class="sm" style="margin-top:6px">De ${esc(E.min)} a ${esc(E.max)} · aprueba con ${esc(E.aprob)} · ${esc(E.dec)} decimal(es)</div><div class="row" style="margin-top:6px">${niveles().map(d=>`<span class="dtag"><i style="background:${d.color}"></i>${esc(d.nombre)} ${esc(d.desde)}–${esc(d.hasta)}</span>`).join("")}</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Códigos de asistencia</h3><button class="btn sm" data-go="codigos">Editar</button></div><div class="row" style="margin-top:6px">${c.codigos.map(x=>`<span class="tag">${esc(x.c)} · ${esc(x.nombre)} (${esc(TIPOS[x.tipo]||x.tipo)})</span>`).join("")}</div></div>
  <div class="card"><h3>Instalar en el dispositivo</h3><div class="sm mut">${instEv?"Este navegador permite instalar Aula Docente como aplicación, con su propio ícono.":window.matchMedia("(display-mode: standalone)").matches?"Ya estás usando la aplicación instalada.":"En Android abre esta página en Chrome y elige ⋮ → Instalar aplicación. En iPhone, en Safari: Compartir → Agregar a inicio."}</div>${instEv?`<div class="row" style="margin-top:8px"><button class="btn sm pri" data-go="instalar">Instalar aplicación</button></div>`:""}</div>
  <div class="card"><h3>Google Drive</h3><div class="sm">${c.drive&&c.drive.rootId?`Carpeta principal creada. <a href="https://drive.google.com/drive/folders/${esc(c.drive.rootId)}" target="_blank" rel="noopener">Abrir en Drive</a> · ${Object.keys(c.drive.carpetas||{}).length} subcarpeta(s) por curso y asignatura.`:"La carpeta se crea automáticamente con la primera evidencia que subas."}</div><div class="row" style="margin-top:8px">${driveOn()?`<button class="btn sm" data-go="probarDrive">Conectar y crear carpeta</button>`:`<span class="mut sm">Google Drive no está configurado (falta GOOGLE_CLIENT_ID en config.js).</span>`}${c.drive&&c.drive.rootId?`<button class="btn sm dan" data-go="resetDrive">Olvidar carpetas</button>`:""}</div></div>
@@ -680,7 +692,7 @@ function formCurso(x){const nuevo=!x;x=x||{id:nid()};openModal(`<div class="hd">
  $("#c_ok",sh).onclick=async()=>{const o={...x,nombre:$("#c_n").value.trim(),grado:$("#c_g").value.trim(),jornada:$("#c_j").value.trim(),director:$("#c_d").value.trim()};if(!o.nombre)return toast("Escribe el nombre del curso.",true);
   try{await put("cursos",o);for(const i of $$(".c_as:checked")){const a=S.asigs[i.value];await put("asigs",{...a,cursoIds:[...new Set([...(a.cursoIds||[]),o.id])]});}if(nuevo){ctx.c=o.id;lsSet("ctx",ctx);}closeModal();toast("Curso guardado");}catch(e){toast(dbMsg(e),true);}};
  if($("#c_del",sh))$("#c_del",sh).onclick=async()=>{if(Object.values(S.ests).some(e=>e.cursoId===x.id))return toast("El curso tiene estudiantes. En Estudiantes usa “Seleccionar” para moverlos o eliminarlos.",true);if(await ask(`¿Eliminar el curso ${x.nombre}?`,"Eliminar",true)){try{await del("cursos",x.id);closeModal();}catch(e){toast(dbMsg(e),true);}}};});}
-function formAsig(a){const nuevo=!a;a=a||{id:nid(),cursoIds:ctx.c?[ctx.c]:[],componentes:[{id:"k1",nombre:"Saber",peso:30},{id:"k2",nombre:"Hacer",peso:50},{id:"k3",nombre:"Ser",peso:20}]};
+function formAsig(a){const nuevo=!a;a=a||{id:nid(),cursoIds:ctx.c?[ctx.c]:[],componentes:(cfg().plantilla||_def.plantilla).map(c=>({...c}))};
  const re=rowsEd(comps(a),[{k:"nombre",l:"Componente"},{k:"peso",l:"Peso %",t:"number",w:80}],()=>({id:nid(),nombre:"",peso:""}));
  openModal(`<div class="hd"><h3>${nuevo?"Nueva asignatura":"Editar asignatura"}</h3><button class="x" data-close>×</button></div>
  <div class="f2"><label class="f">Nombre<input type="text" id="s_n" value="${esc(a.nombre)}" placeholder="Tecnología e informática"></label><label class="f">Horas semanales<input type="number" min="0" id="s_h" value="${esc(a.horas)}"></label></div>
@@ -692,17 +704,19 @@ function formAsig(a){const nuevo=!a;a=a||{id:nid(),cursoIds:ctx.c?[ctx.c]:[],com
    const o={...a,nombre:$("#s_n").value.trim(),horas:$("#s_h").value,cursoIds:$$(".s_c:checked").map(i=>i.value),componentes:k.map(r=>({id:r.id,nombre:r.nombre,peso:+r.peso||0}))};if(!o.nombre)return toast("Escribe el nombre de la asignatura.",true);
    try{await put("asigs",o);if(nuevo){ctx.a=o.id;lsSet("ctx",ctx);}closeModal();toast("Asignatura guardada");}catch(e){toast(dbMsg(e),true);}};
   if($("#s_del",sh))$("#s_del",sh).onclick=async()=>{const n=Object.values(S.acts).filter(x=>x.asigId===a.id).length;if(n)return toast(`La asignatura tiene ${n} actividades evaluativas. Elimínalas primero.`,true);if(await ask(`¿Eliminar ${a.nombre}?`,"Eliminar",true)){try{await del("asigs",a.id);closeModal();}catch(e){toast(dbMsg(e),true);}}};});}
-function formPeriodos(){const re=rowsEd(cfg().periodos,[{k:"nombre",l:"Nombre"},{k:"inicio",l:"Inicio",t:"date"},{k:"fin",l:"Fin",t:"date"},{k:"peso",l:"Peso %",t:"number",w:70}],()=>({id:"p"+nid(),nombre:"Periodo "+(cfg().periodos.length+1),inicio:"",fin:"",peso:""}));
- openModal(`<div class="hd"><h3>Periodos académicos</h3><button class="x" data-close>×</button></div><p class="sm mut">Define cuántos periodos maneja tu institución (trimestres, semestres, cuatro periodos…), sus fechas y su peso en la nota final. Con fechas, la asistencia y las actividades se ubican solas en el periodo.</p>${re.html}
- <div class="ft"><button class="btn pri" id="p_ok">Guardar</button></div>`,sh=>{re.mount(sh);$("#p_ok",sh).onclick=async()=>{const ps=re.read().filter(p=>p.nombre).map(p=>({id:p.id,nombre:p.nombre,inicio:p.inicio,fin:p.fin,peso:+p.peso||0}));if(!ps.length)return toast("Debe existir al menos un periodo.",true);
+function formPeriodos(pre){const re=rowsEd(pre||cfg().periodos,[{k:"nombre",l:"Nombre"},{k:"inicio",l:"Inicio",t:"date"},{k:"fin",l:"Fin",t:"date"},{k:"peso",l:"Peso %",t:"number",w:70}],()=>({id:"p"+nid(),nombre:"Periodo "+(cfg().periodos.length+1),inicio:"",fin:"",peso:""}));
+ openModal(`<div class="hd"><h3>Periodos académicos</h3><button class="x" data-close>×</button></div><p class="sm mut">Define cuántos periodos maneja tu institución (trimestres, semestres, cuatro periodos…), sus fechas y su peso en la nota final. Con fechas, la asistencia y las actividades se ubican solas en el periodo.</p><div class="row" style="margin-bottom:10px"><button class="btn sm" id="p_tri">Usar 3 trimestres</button><button class="btn sm" id="p_4p">Usar 4 periodos</button></div>${re.html}
+ <div class="ft"><button class="btn pri" id="p_ok">Guardar</button></div>`,sh=>{re.mount(sh);
+  const act=cfg().periodos;const mk=(n,nom,pesos)=>Array.from({length:n},(_,i)=>({id:(act[i]||{}).id||"p"+nid(),nombre:nom+" "+(i+1),inicio:(act[i]||{}).inicio||"",fin:(act[i]||{}).fin||"",peso:pesos[i]}));
+  $("#p_tri",sh).onclick=()=>formPeriodos(mk(3,"Trimestre",[33.3,33.3,33.4]));$("#p_4p",sh).onclick=()=>formPeriodos(mk(4,"Periodo",[25,25,25,25]));$("#p_ok",sh).onclick=async()=>{const ps=re.read().filter(p=>p.nombre).map(p=>({id:p.id,nombre:p.nombre,inicio:p.inicio,fin:p.fin,peso:+p.peso||0}));if(!ps.length)return toast("Debe existir al menos un periodo.",true);
   const fuera=cfg().periodos.filter(p=>!ps.some(q=>q.id===p.id)&&(Object.values(S.acts).some(a=>a.perId===p.id)||Object.values(S.asis).some(a=>a.perId===p.id)));
   if(fuera.length&&!await ask(`Vas a quitar ${fuera.map(p=>p.nombre).join(", ")}, que tiene notas o asistencia registradas. Esos registros dejarán de mostrarse. ¿Continuar?`,"Quitar",true))return;
   if(ps.some(p=>p.inicio&&p.fin&&p.inicio>p.fin))return toast("Hay un periodo cuya fecha de inicio es posterior a la de fin.",true);
   await saveCfg({periodos:ps});closeModal();toast("Periodos guardados");};});}
-function formEscala(){const E=cfg().escala;const re=rowsEd(E.desempenos||[],[{k:"nombre",l:"Desempeño"},{k:"desde",l:"Desde",t:"number",w:76},{k:"hasta",l:"Hasta",t:"number",w:76}],()=>({nombre:"",desde:"",hasta:""}));
+function formEscala(){const E=cfg().escala;const re=rowsEd(niveles(),[{k:"color",l:"Color",t:"color",w:46},{k:"nombre",l:"Desempeño"},{k:"desde",l:"Desde",t:"number",w:70},{k:"hasta",l:"Hasta",t:"number",w:70}],()=>({nombre:"",desde:"",hasta:"",color:DESCOL[niveles().length%DESCOL.length]}));
  openModal(`<div class="hd"><h3>Escala de valoración</h3><button class="x" data-close>×</button></div><p class="sm mut">Ajusta la escala según el SIEE de tu institución (Decreto 1290 de 2009).</p>
  <div class="f2"><label class="f">Nota mínima<input type="number" step="any" id="e_min" value="${esc(E.min)}"></label><label class="f">Nota máxima<input type="number" step="any" id="e_max" value="${esc(E.max)}"></label><label class="f">Nota aprobatoria<input type="number" step="any" id="e_ap" value="${esc(E.aprob)}"></label><label class="f">Decimales<select id="e_dec">${[0,1,2].map(d=>`<option ${+E.dec===d?"selected":""}>${d}</option>`).join("")}</select></label></div>
- <div class="f">Desempeños</div>${re.html}<div class="ft"><button class="btn pri" id="e_ok">Guardar</button></div>`,sh=>{re.mount(sh);$("#e_ok",sh).onclick=async()=>{const o={min:+$("#e_min").value,max:+$("#e_max").value,aprob:+$("#e_ap").value,dec:+$("#e_dec").value,desempenos:re.read().filter(d=>d.nombre).map(d=>({nombre:d.nombre,desde:+d.desde,hasta:+d.hasta}))};
+ <div class="f">Desempeños</div>${re.html}<div class="ft"><button class="btn pri" id="e_ok">Guardar</button></div>`,sh=>{re.mount(sh);$("#e_ok",sh).onclick=async()=>{const o={min:+$("#e_min").value,max:+$("#e_max").value,aprob:+$("#e_ap").value,dec:+$("#e_dec").value,desempenos:re.read().filter(d=>d.nombre).map(d=>({nombre:d.nombre,desde:+d.desde,hasta:+d.hasta,color:d.color}))};
   if(!(o.max>o.min)||o.aprob<o.min||o.aprob>o.max)return toast("Revisa la escala: la máxima debe superar a la mínima y la aprobatoria estar entre ambas.",true);await saveCfg({escala:o});closeModal();toast("Escala guardada");};});}
 function formCodigos(){const re=rowsEd(cfg().codigos,[{k:"c",l:"Código",w:70},{k:"nombre",l:"Significado"},{k:"tipo",l:"Cuenta como",opts:TIPOS}],()=>({c:"",nombre:"",tipo:"registro"}));
  openModal(`<div class="hd"><h3>Códigos de asistencia</h3><button class="x" data-close>×</button></div><p class="sm mut">Crea los códigos que uses (por ejemplo, R para retiro anticipado o AI para actividad institucional) y define cómo cuentan en el consolidado.</p>${re.html}<div class="ft"><button class="btn pri" id="k_ok">Guardar</button></div>`,sh=>{re.mount(sh);$("#k_ok",sh).onclick=async()=>{const k=re.read().filter(x=>x.c).map(x=>({c:x.c.toUpperCase().slice(0,4),nombre:x.nombre||x.c,tipo:x.tipo}));
@@ -737,8 +751,9 @@ function ask(msg,ok="Confirmar",danger){return new Promise(res=>{$("#cfs").inner
 
 /* ---------- eventos de la vista ---------- */
 $("#main").addEventListener("click",async e=>{
- const t=e.target.closest("[data-week],[data-slot],[data-cod],[data-quitar],[data-pub],[data-go],[data-est],[data-mark],[data-fecha],[data-evact],[data-act],[data-evid],[data-curso],[data-asig],[data-evp]");if(!t)return;
+ const t=e.target.closest("[data-qact],[data-week],[data-slot],[data-cod],[data-quitar],[data-pub],[data-go],[data-est],[data-mark],[data-fecha],[data-evact],[data-act],[data-evid],[data-curso],[data-asig],[data-evp]");if(!t)return;
  const d=t.dataset;
+ if(d.qact){crearCasilla(d.qact);return;}
  if(d.week!=null){UI.semana=+d.week===0?lunesDe(hoy()):addD(UI.semana||lunesDe(hoy()),+d.week);renderMain();return;}
  if(d.slot){panelClase(d.slot,d.f);return;}
  if(d.cod){accionCodigo(d.cod,t);return;}
@@ -758,6 +773,8 @@ $("#main").addEventListener("click",async e=>{
   case"datos":return formDatos();case"curso":return formCurso();case"asig":return formAsig();
   case"est":if(!cursosArr().length)return toast("Primero crea un curso.",true);return formEst(null);
   case"imp":return importar();
+  case"stats":return estadisticas();
+  case"plantilla":return formPlantilla();
   case"horario":return formHorario();
   case"pub":return formPub();
   case"avRec":AV.loaded=false;return renderMain();
@@ -786,7 +803,7 @@ $("#main").addEventListener("change",e=>{
  if(t.id==="as_tema"||t.id==="as_obs"){const doc=asisDoc();doc[t.id==="as_tema"?"tema":"obs"]=t.value.trim();queueSave("asis",doc.id,300);return;}
  if(t.dataset.n){const E=cfg().escala;const raw=t.value.trim().replace(",",".");const n=num(raw);
   if(raw!==""&&(n==null||n<+E.min||n>+E.max)){t.classList.add("bad");toast(`La nota debe estar entre ${E.min} y ${E.max}.`,true);return;}
-  t.classList.remove("bad");t.classList.toggle("low",n!=null&&aprueba(n)===false);
+  t.classList.remove("bad");t.setAttribute("style",tinte(n));
   const a=t.dataset.n,eid=t.dataset.e;const cur=S.notas[a]||{actId:a,n:{}};const nn={...(cur.n||{})};if(raw==="")delete nn[eid];else nn[eid]=n;S.notas[a]={...cur,id:a,actId:a,n:nn};queueSave("notas",a,600);actualizarFila(eid);}
 });
 $("#main").addEventListener("keydown",e=>{if(e.key!=="Enter"||!e.target.dataset.n)return;e.preventDefault();const td=e.target.closest("td"),tr=td.parentElement;const i=Array.from(tr.children).indexOf(td);const nx=tr.nextElementSibling;const inp=nx&&nx.children[i]&&nx.children[i].querySelector("input");if(inp){inp.focus();inp.select();}else e.target.blur();});
@@ -961,6 +978,75 @@ function formPub(p){
    const {error}=await sb.from("publicaciones").delete().eq("id",p.id);if(error)return toast(avErr(error),true);closeModal();toast("Publicación eliminada");await loadAula();};
  });
 }
+
+/* ---------- ESTRUCTURA DE LA NOTA Y ESTADÍSTICAS ---------- */
+async function crearCasilla(compId){const as=S.asigs[ctx.a],cur=S.cursos[ctx.c];if(!as||!cur)return;const k=comps(as).find(c=>c.id===compId);if(!k)return;
+ const o={id:nid(),cursoId:cur.id,asigId:as.id,perId:ctx.p,compId,nombre:k.nombre,fecha:hoy(),peso:1,desc:"",creado:Date.now()};
+ try{await put("acts",o);toast(`Casilla “${k.nombre}” creada`);}catch(e){toast(dbMsg(e),true);}}
+function formPlantilla(){
+ const re=rowsEd((cfg().plantilla||_def.plantilla),[{k:"nombre",l:"Ítem de la nota"},{k:"peso",l:"Peso %",t:"number",w:80}],()=>({id:nid(),nombre:"",peso:""}));
+ const nA=Object.keys(S.asigs).length;
+ openModal(`<div class="hd"><h3>Estructura de la nota</h3><button class="x" data-close>×</button></div>
+ <p class="sm mut">Define los ítems que componen la nota del periodo y su porcentaje. Por ejemplo: Actividades 70 %, Evaluación trimestral 20 %, Autoevaluación 10 %. Puedes agregar otros ítems (proyecto, participación, cuaderno…).</p>${re.html}<div class="sm mut" id="pl_sum" style="margin-top:6px"></div>
+ ${nA?`<label class="chk" style="margin-top:12px"><input type="checkbox" id="pl_all"><span>Aplicar también a mis ${nA} asignatura(s) existentes</span></label>`:""}
+ <div class="ft"><button class="btn pri" id="pl_ok">Guardar</button></div>`,sh=>{re.mount(sh);
+  const sum=()=>{const e=$("#pl_sum");if(!e)return;const t=re.read().reduce((s,r)=>s+(+r.peso||0),0);e.textContent=`Suma: ${Math.round(t*100)/100}%`+(Math.abs(t-100)>0.01?" (debe sumar 100%)":"");e.style.color=Math.abs(t-100)>0.01?"var(--bad)":"";};
+  sh.addEventListener("input",sum);sh.addEventListener("click",()=>setTimeout(sum));sum();
+  $("#pl_ok",sh).onclick=async()=>{const k=re.read().filter(r=>r.nombre).map(r=>({id:r.id,nombre:r.nombre,peso:+r.peso||0}));
+   if(!k.length)return toast("Agrega al menos un ítem.",true);const t=k.reduce((s,r)=>s+r.peso,0);if(Math.abs(t-100)>0.01)return toast(`Los porcentajes suman ${Math.round(t*100)/100}%. Deben sumar 100%.`,true);
+   const all=$("#pl_all")&&$("#pl_all").checked;
+   if(all){let orf=0;const planes=[];
+    for(const a of Object.values(S.asigs)){const viejo=comps(a);const mapa={};
+     for(const c of viejo){const m=k.find(x=>x.nombre.trim().toLowerCase()===c.nombre.trim().toLowerCase());if(m)mapa[c.id]=m.id;}
+     const acts=Object.values(S.acts).filter(x=>x.asigId===a.id);for(const x of acts)if(!mapa[x.compId]&&!k.some(c=>c.id===x.compId))orf++;
+     planes.push({a,mapa,acts});}
+    if(orf&&!await ask(`${orf} actividad(es) ya creadas pertenecen a ítems que no existen en la nueva estructura (por ejemplo “Saber” o “Hacer”). Quedarán marcadas “sin componente” hasta que las abras y les asignes un ítem. ¿Continuar?`,"Aplicar"))return;
+    try{for(const {a,mapa,acts} of planes){await put("asigs",{...a,componentes:k.map(c=>({...c}))});for(const x of acts)if(mapa[x.compId]&&mapa[x.compId]!==x.compId)await put("acts",{...x,compId:mapa[x.compId]});}}catch(e){return toast(dbMsg(e),true);}}
+   await saveCfg({plantilla:k});closeModal();toast(all?"Estructura aplicada a todas las asignaturas":"Estructura guardada");};
+ });
+}
+function estadisticas(){
+ const as=S.asigs[ctx.a],cur=S.cursos[ctx.c],per=cfg().periodos.find(p=>p.id===ctx.p);if(!as||!cur||!per)return toast("Selecciona curso, asignatura y periodo.",true);
+ UI.stAlc=UI.stAlc||"per";UI.stGrp=UI.stGrp||"curso";
+ const cursos=UI.stGrp==="curso"?[cur.id]:(as.cursoIds||[]).filter(i=>S.cursos[i]);
+ const filas=[];for(const cid of cursos)for(const e of estsCurso(cid)){const n=UI.stAlc==="per"?notaPer(e.id,cid,as.id,per.id):notaAcum(e.id,cid,as.id);filas.push({e,cid,n});}
+ const con=filas.filter(f=>f.n!=null),sin=filas.length-con.length,niv=niveles();
+ const cuenta=niv.map(d=>({d,ests:con.filter(f=>{const x=nivelDe(f.n);return x&&x.nombre===d.nombre;})}));
+ const fuera=con.filter(f=>!nivelDe(f.n)).length;
+ const vals=con.map(f=>rnd(f.n)).sort((a,b)=>a-b);const prom=vals.length?vals.reduce((s,v)=>s+v,0)/vals.length:null;
+ const med=vals.length?(vals.length%2?vals[(vals.length-1)/2]:(vals[vals.length/2-1]+vals[vals.length/2])/2):null;
+ const apr=con.filter(f=>aprueba(f.n)).length;
+ const titulo=`${as.nombre} · ${UI.stGrp==="curso"?cur.nombre:"todos los cursos"} · ${UI.stAlc==="per"?per.nombre:"acumulado del año"}`;
+ const svg=pieSVG(cuenta.map(c=>({nombre:c.d.nombre,color:c.d.color,v:c.ests.length,rango:`${c.d.desde}–${c.d.hasta}`})),con.length,titulo);
+ openModal(`<div class="hd"><h3>Estadísticas</h3><button class="x" data-close>×</button></div>
+ <div class="row" style="margin-bottom:10px"><div class="seg"><button data-stalc="per" class="${UI.stAlc==="per"?"on":""}">${esc(per.nombre)}</button><button data-stalc="acu" class="${UI.stAlc==="acu"?"on":""}">Acumulado del año</button></div>
+ ${(as.cursoIds||[]).length>1?`<div class="seg"><button data-stgrp="curso" class="${UI.stGrp==="curso"?"on":""}">${esc(cur.nombre)}</button><button data-stgrp="todos" class="${UI.stGrp==="todos"?"on":""}">Todos los cursos</button></div>`:""}</div>
+ ${con.length?`<div id="st_svg">${svg}</div>
+ <div class="stt"><div><b>${fmt(prom)}</b><span>Promedio</span></div><div><b>${fmt(med)}</b><span>Mediana</span></div><div><b>${fmt(vals[vals.length-1])}</b><span>Nota más alta</span></div><div><b>${fmt(vals[0])}</b><span>Nota más baja</span></div><div><b>${Math.round(100*apr/con.length)}%</b><span>Aprueban (${apr} de ${con.length})</span></div>${sin?`<div><b>${sin}</b><span>Sin nota</span></div>`:""}</div>
+ <table class="g" style="width:100%;margin-bottom:10px"><thead><tr><th style="text-align:left">Desempeño</th><th>Rango</th><th>Estudiantes</th><th>%</th></tr></thead><tbody>${cuenta.map(c=>`<tr><td style="text-align:left"><span class="dtag"><i style="background:${c.d.color}"></i>${esc(c.d.nombre)}</span></td><td>${esc(c.d.desde)}–${esc(c.d.hasta)}</td><td>${c.ests.length}</td><td>${Math.round(1000*c.ests.length/con.length)/10}%</td></tr>`).join("")}</tbody></table>
+ ${fuera?`<div class="banner">${fuera} nota(s) quedan fuera de los rangos de desempeño. Revisa la escala en Ajustes.</div>`:""}
+ ${cuenta.filter(c=>c.ests.length).map(c=>`<details style="margin-bottom:6px"><summary class="sm"><span class="dtag"><i style="background:${c.d.color}"></i>${esc(c.d.nombre)} (${c.ests.length})</span></summary><div class="sm" style="padding:6px 0 0 18px">${c.ests.sort((a,b)=>a.n-b.n).map(f=>`${esc(nomEst(f.e))}${cursos.length>1?" ("+esc(S.cursos[f.cid].nombre)+")":""}: ${fmt(f.n)}`).join("<br>")}</div></details>`).join("")}
+ <div class="ft"><button class="btn" id="st_png">Descargar imagen</button></div>`:`<div class="empty">Todavía no hay notas para calcular estadísticas en este ${UI.stAlc==="per"?"periodo":"año"}.</div>`}`,sh=>{
+  sh.addEventListener("click",ev=>{const b=ev.target.closest("[data-stalc],[data-stgrp]");if(!b)return;if(b.dataset.stalc)UI.stAlc=b.dataset.stalc;if(b.dataset.stgrp)UI.stGrp=b.dataset.stgrp;estadisticas();});
+  const pb=$("#st_png",sh);if(pb)pb.onclick=()=>svgPNG($("#st_svg svg"),`Estadisticas_${slug(titulo)}.png`);
+ });
+}
+function pieSVG(datos,total,titulo){
+ const W=560,H=300,cx=150,cy=165,r=112;let a0=-Math.PI/2,sl="";
+ const nz=datos.filter(d=>d.v>0);
+ for(const d of datos){if(!d.v)continue;const pct=Math.round(1000*d.v/total)/10;const tip=`<title>${esc(d.nombre)}: ${d.v} estudiante(s), ${pct}%</title>`;
+  if(nz.length===1){sl+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${d.color}">${tip}</circle>`;break;}
+  const a1=a0+2*Math.PI*d.v/total;const x0=cx+r*Math.cos(a0),y0=cy+r*Math.sin(a0),x1=cx+r*Math.cos(a1),y1=cy+r*Math.sin(a1);
+  sl+=`<path d="M${cx},${cy} L${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${a1-a0>Math.PI?1:0} 1 ${x1.toFixed(2)},${y1.toFixed(2)} Z" fill="${d.color}" stroke="#fff" stroke-width="2" stroke-linejoin="round">${tip}</path>`;
+  const am=(a0+a1)/2;if(d.v/total>=0.06)sl+=`<text x="${(cx+r*0.64*Math.cos(am)).toFixed(1)}" y="${(cy+r*0.64*Math.sin(am)).toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="700" fill="#fff" pointer-events="none">${Math.round(100*d.v/total)}%</text>`;
+  a0=a1;}
+ const ley=datos.map((d,i)=>{const y=96+i*30;return `<rect x="300" y="${y-9}" width="14" height="14" rx="3" fill="${d.color}"/><text x="322" y="${y}" font-size="14" fill="#1b2630" dominant-baseline="central">${esc(d.nombre)} <tspan fill="#5b6872" font-size="12">(${esc(d.rango)})</tspan></text><text x="${W-14}" y="${y}" font-size="14" fill="#1b2630" text-anchor="end" dominant-baseline="central" font-weight="700">${d.v} · ${Math.round(1000*d.v/total)/10}%</text>`;}).join("");
+ return `<svg class="pie" viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Distribución por nivel de desempeño" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" style="max-width:${W}px;display:block;margin:0 auto">
+ <rect width="${W}" height="${H}" fill="#fff"/><text x="14" y="24" font-size="15" font-weight="700" fill="#1b2630">Distribución por nivel de desempeño</text><text x="14" y="44" font-size="12" fill="#5b6872">${esc(titulo)} · ${total} estudiante(s) con nota</text>${sl}${ley}</svg>`;
+}
+function svgPNG(svg,nombre){if(!svg)return;const xml=new XMLSerializer().serializeToString(svg);const img=new Image();const vb=svg.viewBox.baseVal;const k=2;
+ img.onload=()=>{const c=document.createElement("canvas");c.width=vb.width*k;c.height=vb.height*k;const g=c.getContext("2d");g.drawImage(img,0,0,c.width,c.height);c.toBlob(b=>{if(!b)return toast("No se pudo generar la imagen.",true);const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=nombre;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);},"image/png");};
+ img.onerror=()=>toast("No se pudo generar la imagen.",true);img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(xml);}
 
 /* ---------- PORTAL DEL ESTUDIANTE ---------- */
 const PT={mats:[],pubs:[],err:"",loading:false,filtro:"",unirse:false,join:null,joinErr:"",q:""};let joinPend=null;
