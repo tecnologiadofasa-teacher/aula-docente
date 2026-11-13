@@ -9,6 +9,7 @@ Funciona como sitio estático en **GitHub Pages**, con **Supabase** para el inic
 | Archivo | Función |
 |---|---|
 | `index.html` | Aplicación completa (interfaz y lógica) |
+| `horarios.html` | Generador de horarios escolares integrado (coordinación) |
 | `config.js` | URL y clave pública de Supabase; ID de cliente de Google (opcional) |
 | `supabase/schema.sql` | Tabla y políticas de seguridad |
 | `manifest.webmanifest`, `sw.js`, `icons/` | Instalación como aplicación |
@@ -89,6 +90,8 @@ Cuando el colegio usa el módulo de coordinación, los docentes **no** registran
    - **Alertas**: estudiantes que superan el porcentaje de inasistencia definido en el SIEE (crítico y preventivo) o que llevan varios días seguidos sin asistir.
    - **Excusas**: muestra solo los estudiantes que faltaron sin excusa en la fecha elegida, por curso; se excusan uno a uno, marcando varios o con “marcar todos” del curso, y hay una excusa colectiva para un curso completo (salidas pedagógicas, actividades institucionales). Al aprobarlas, las faltas de esas fechas cuentan como justificadas en todas las asignaturas. Los docentes ven que la falta está excusada, pero no el motivo.
    - **Institución**: códigos, miembros y parámetros de alertas.
+
+   - **Horarios**: abre el generador de horarios (`horarios.html`) integrado. **Traer datos de la institución** carga cursos, asignaturas, docentes y la carga académica de cada docente (con sus horas semanales, si las registró); se completa la jornada, salones, disponibilidad, proyectos y reuniones; se genera y **Publicar horario a los docentes** envía a cada uno sus clases, que aparecen en su vista Semana.
 
 La coordinación **no** tiene acceso a calificaciones, actividades, evidencias ni al aula virtual de los docentes; la base de datos lo impide. Los estudiantes de un mismo curso registrados por distintos docentes se reconocen por el nombre del curso y el nombre completo (o el documento), así que conviene que todos usen el mismo nombre de curso y la misma lista.
 

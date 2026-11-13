@@ -418,3 +418,21 @@ create policy "iest_coord" on public.inst_estudiantes for all to authenticated u
 revoke all on public.inst_cursos, public.inst_asignaturas, public.inst_estudiantes from anon;
 grant select, insert, update, delete on public.inst_cursos, public.inst_asignaturas, public.inst_estudiantes to authenticated;
 
+
+------------------------------------------------------------------
+-- 11. Horario institucional publicado por coordinación
+--     Lo generan en horarios.html y cada docente recibe sus clases.
+------------------------------------------------------------------
+create table if not exists public.inst_horario (
+  inst_id       uuid primary key references public.instituciones (id) on delete cascade,
+  data          jsonb not null default '{}'::jsonb,
+  publicado_por uuid default auth.uid(),
+  updated_at    timestamptz not null default now()
+);
+alter table public.inst_horario enable row level security;
+drop policy if exists "ihor_leer" on public.inst_horario;
+drop policy if exists "ihor_coord" on public.inst_horario;
+create policy "ihor_leer" on public.inst_horario for select to authenticated using (inst_id = public.mi_institucion() and public.es_docente());
+create policy "ihor_coord" on public.inst_horario for all to authenticated using (public.es_coord_de(inst_id)) with check (public.es_coord_de(inst_id));
+revoke all on public.inst_horario from anon;
+grant select, insert, update, delete on public.inst_horario to authenticated;

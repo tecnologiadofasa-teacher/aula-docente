@@ -689,7 +689,7 @@ function vAjustes(){
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">${coordSolo()?"Tus datos":"Docente e institución"}</h3><button class="btn sm" data-go="datos">Editar</button></div><dl class="kv" style="margin-top:8px"><dt>Docente</dt><dd>${esc(c.docente||"—")}</dd><dt>Institución</dt><dd>${esc(c.institucion||"—")}</dd><dt>Año lectivo</dt><dd>${esc(c.anio)}</dd><dt>Alerta de fallas</dt><dd>${esc(c.alertaFallas)} o más por periodo</dd></dl></div>
  ${modoOficial()?cardCarga():""}<div class="card sd" style="${modoOficial()?"display:none":""}"><div class="row"><h3 class="sp" style="margin:0">Cursos</h3><button class="btn sm pri" data-go="curso">+ Curso</button></div><div class="list">${cursosArr().map(x=>`<div class="it"><div class="nm"><b>${esc(x.nombre)}</b><span class="mut sm">${esc([x.grado?"Grado "+x.grado:"",x.jornada,x.director?"Director: "+x.director:""].filter(Boolean).join(" · "))} · ${estsCurso(x.id).length} estudiantes</span></div><button class="btn sm" data-curso="${x.id}">Editar</button></div>`).join("")||'<div class="mut sm">Sin cursos.</div>'}</div></div>
  <div class="card sd" style="${modoOficial()?"display:none":""}"><div class="row"><h3 class="sp" style="margin:0">Asignaturas y forma de calificar</h3><button class="btn sm pri" data-go="asig">+ Asignatura</button></div><div class="list">${Object.values(S.asigs).sort(byName).map(a=>`<div class="it"><div class="nm"><b>${esc(a.nombre)}</b><span class="mut sm">${esc((a.cursoIds||[]).map(i=>(S.cursos[i]||{}).nombre).filter(Boolean).join(", ")||"Sin cursos")} · ${esc(comps(a).map(k=>k.nombre+" "+k.peso+"%").join(", "))}</span></div><button class="btn sm" data-asig="${a.id}">Editar</button></div>`).join("")||'<div class="mut sm">Sin asignaturas.</div>'}</div></div>
- <div class="card sd"><div class="row"><h3 class="sp" style="margin:0">Horario de clases</h3><button class="btn sm" data-go="horario">Editar</button></div><div class="sm mut" style="margin-top:6px">${horario().length?[1,2,3,4,5,6].map(d=>{const n=horario().filter(s=>+s.dia===d).length;return n?`${DIA3[d]}: ${n}`:"";}).filter(Boolean).join(" · ")+` · ${horario().length} clases por semana`:"Sin horario registrado."}</div></div>
+ <div class="card sd"><div class="row"><h3 class="sp" style="margin:0">Horario de clases</h3><button class="btn sm" data-go="horario">Editar</button></div>${cfg().horarioPub&&horario().length?`<div class="banner i sm" style="margin:8px 0 0">Publicado por coordinación el ${fLoc(cfg().horarioPub)}. Si lo editas, una nueva publicación lo reemplazará.</div>`:""}<div class="sm mut" style="margin-top:6px">${horario().length?[1,2,3,4,5,6].map(d=>{const n=horario().filter(s=>+s.dia===d).length;return n?`${DIA3[d]}: ${n}`:"";}).filter(Boolean).join(" · ")+` · ${horario().length} clases por semana`:"Sin horario registrado."}</div></div>
  <div class="card sd"><div class="row"><h3 class="sp" style="margin:0">Estructura de la nota</h3><button class="btn sm" data-go="plantilla">Editar</button></div><div class="row" style="margin-top:6px">${(cfg().plantilla||_def.plantilla).map(k=>`<span class="tag">${esc(k.nombre)} ${esc(k.peso)}%</span>`).join("")}</div><div class="sm mut" style="margin-top:6px">Se usa al crear asignaturas; cada asignatura puede ajustarse aparte.</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Periodos académicos</h3><button class="btn sm" data-go="periodos">Editar</button></div>${sumP!==100?`<div class="banner" style="margin:8px 0 0">Los pesos suman ${sumP}%. El acumulado se normaliza, pero conviene que sumen 100%.</div>`:""}<div class="list">${c.periodos.map(p=>`<div class="it"><div class="nm"><b>${esc(p.nombre)}</b><span class="mut sm">${p.inicio?fFecha(p.inicio)+" a "+fFecha(p.fin):"Sin fechas"}</span></div><span class="tag">${esc(p.peso)}%</span></div>`).join("")}</div></div>
  <div class="card sd"><div class="row"><h3 class="sp" style="margin:0">Escala de valoración</h3><button class="btn sm" data-go="escala">Editar</button></div><div class="sm" style="margin-top:6px">De ${esc(E.min)} a ${esc(E.max)} · aprueba con ${esc(E.aprob)} · ${esc(E.dec)} decimal(es)</div><div class="row" style="margin-top:6px">${niveles().map(d=>`<span class="dtag"><i style="background:${d.color}"></i>${esc(d.nombre)} ${esc(d.desde)}–${esc(d.hasta)}</span>`).join("")}</div></div>
@@ -790,7 +790,7 @@ $("#main").addEventListener("click",async e=>{
  if(d.cod){accionCodigo(d.cod,t);return;}
  if(d.quitar){quitarAcceso(d.quitar);return;}
  if(d.pub){formPub(AV.pubs.find(x=>x.id===d.pub));return;}
- if(d.cot){CO.tab=d.cot;CO.curso=CO.curso||"";CO.estado="";return renderMain();}
+ if(d.cot){if(d.cot==="horarios")CO._hor=undefined;CO.tab=d.cot;CO.curso=CO.curso||"";CO.estado="";return renderMain();}
  if(d.co){accionCo(d.co,t);return;}
  if(d.marca){const doc=asisDoc();if(doc.extra[d.marca]===d.c)delete doc.extra[d.marca];else doc.extra[d.marca]=d.c;queueSave("asis",doc.id,500);
   $$(`[data-marca="${d.marca}"]`).forEach(b=>b.classList.toggle("on",b.dataset.c===doc.extra[d.marca]));return;}
@@ -1182,7 +1182,7 @@ const INST={m:null,inst:null,exc:[],meta:null,cargado:false};
 const esCoord=()=>!!(INST.m&&INST.m.rol==="coordinador");
 async function loadInst(){
  try{const {data:m,error}=await sb.from("miembros").select("*").eq("user_id",uid);if(error)throw error;INST.m=(m||[])[0]||null;
-  if(INST.m){const {data:i}=await sb.from("instituciones").select("*").eq("id",INST.m.inst_id);INST.inst=(i||[])[0]||null;const {data:e}=await sb.rpc("excusas_aprobadas");INST.exc=e||[];await syncMeta();await loadOficial();await syncOficial();}
+  if(INST.m){const {data:i}=await sb.from("instituciones").select("*").eq("id",INST.m.inst_id);INST.inst=(i||[])[0]||null;const {data:e}=await sb.rpc("excusas_aprobadas");INST.exc=e||[];await syncMeta();await loadOficial();await syncOficial();await aplicarHorarioInst();}
   else{INST.inst=null;INST.exc=[];}}catch(e){INST.m=null;}
  INST.cargado=true;
  if(esCoord()&&(!location.hash||location.hash==="#semana")&&(modoCoord()||!cursosArr().length)){location.hash="coord";return;}
@@ -1269,7 +1269,7 @@ function inicioTrim(){const p=periodoDeFecha(hoy());return p&&p.inicio?p.inicio:
 function vCoord(){
  if(!INST.cargado)return `<div class="load">Cargando…</div>`;
  if(!esCoord())return altaCoordHTML();
- const tabs=[["hoy","Hoy"],["cons","Consolidado"],["alertas","Alertas"],["excusas","Excusas"],["listas","Listas oficiales"],["inst","Institución"]];
+ const tabs=[["hoy","Hoy"],["cons","Consolidado"],["alertas","Alertas"],["excusas","Excusas"],["listas","Listas oficiales"],["horarios","Horarios"],["inst","Institución"]];
  let rng;if(CO.tab==="hoy")rng=[CO.f,CO.f];else if(CO.tab==="cons"){if(!CO.desde)CO.desde=inicioTrim();rng=[CO.desde,CO.hasta];}else if(CO.tab==="alertas")rng=[inicioTrim(),hoy()];else if(CO.tab==="excusas"){CO.exF=CO.exF||hoy();rng=[CO.exF,CO.exF];}else rng=[hoy(),hoy()];
  loadCoord(rng[0],rng[1]);
  let h=`<div class="row" style="margin-bottom:8px"><h2 style="margin:0" class="sp">Coordinación</h2><span class="mut sm">${esc((INST.inst||{}).nombre||"")}</span></div>
@@ -1277,8 +1277,8 @@ function vCoord(){
  if(CO.err)h+=`<div class="banner e">${esc(CO.err)}</div>`;
  if(!CO.loaded)return h+`<div class="load" style="min-height:30vh">Cargando información de la institución…</div>`;
  const nd=new Set(CO.miembros.filter(m=>m.rol==="docente"||CO.T[m.user_id]).map(m=>m.user_id)).size;
- if(!nd&&CO.tab!=="inst"&&CO.tab!=="listas")h+=`<div class="banner i">Aún no hay docentes unidos. Compárteles el código de docentes que está en la pestaña Institución.</div>`;
- h+=({hoy:coHoy,cons:coCons,alertas:coAlertas,excusas:coExcusas,listas:coListas,inst:coInst}[CO.tab]||coHoy)();
+ if(!nd&&CO.tab!=="inst"&&CO.tab!=="listas"&&CO.tab!=="horarios")h+=`<div class="banner i">Aún no hay docentes unidos. Compárteles el código de docentes que está en la pestaña Institución.</div>`;
+ h+=({hoy:coHoy,cons:coCons,alertas:coAlertas,excusas:coExcusas,listas:coListas,horarios:coHorarios,inst:coInst}[CO.tab]||coHoy)();
  return h;}
 function filtroCurso(){return `<select id="co_cur" style="flex:1 1 160px"><option value="">Todos los cursos</option>${cursosCo().map(c=>`<option value="${esc(c.n)}" ${c.n===CO.curso?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select>`;}
 function coHoy(){
@@ -1642,6 +1642,34 @@ async function aplicarUnificar(P,log){const {mapC,mapA,mapE}=P;const fuera=new S
  await delMany("ests",[...Object.keys(mapE),...P.sinE.map(e=>e.id)]);
  await delMany("cursos",P.L.c.map(c=>c.id));
  await syncOficial();fixCtx();}
+
+/* ---------- HORARIO INSTITUCIONAL ---------- */
+async function aplicarHorarioInst(){if(!INST.m)return;
+ try{const {data,error}=await sb.from("inst_horario").select("data").eq("inst_id",INST.m.inst_id);if(error)throw error;const r=(data||[])[0];if(!r||!r.data||!r.data.fecha)return;
+  if(cfg().horarioPub===r.data.fecha)return;const mis=(r.data.docentes||{})[uid]||[];
+  if(!mis.length){await saveCfg({horarioPub:r.data.fecha});return;}
+  const cur=[],asg=[];
+  for(const s of mis){if(!S.cursos[s.cursoId]&&!cur.some(x=>x.id===s.cursoId)){const o=OF.cursos.find(x=>x.id===s.cursoId);if(o)cur.push({id:o.id,nombre:o.nombre,grado:o.grado||gradoDe(o.nombre),jornada:o.jornada,director:o.director,oficial:true});}}
+  const porA={};for(const s of mis)(porA[s.asigId]=porA[s.asigId]||new Set()).add(s.cursoId);
+  for(const [aid,cs] of Object.entries(porA)){const l=S.asigs[aid],o=OF.asigs.find(x=>x.id===aid);if(!l&&!o)continue;const ids=[...new Set([...((l&&l.cursoIds)||[]),...cs])];
+   if(!l)asg.push({id:aid,nombre:o.nombre,horas:"",cursoIds:ids,componentes:(cfg().plantilla||_def.plantilla).map(c=>({...c})),oficial:true,creado:Date.now()});else if(ids.length!==(l.cursoIds||[]).length)asg.push({...l,cursoIds:ids});}
+  await putMany("cursos",cur);await putMany("asigs",asg);
+  await saveCfg({horario:mis.map(s=>({id:s.id,dia:+s.dia,inicio:s.inicio,fin:s.fin,cursoId:s.cursoId,asigId:s.asigId,aula:s.aula||""})),horarioPub:r.data.fecha});
+  await syncOficial();toast("Coordinación publicó tu horario: ya aparece en Semana");sched();
+ }catch(e){}}
+function coHorarios(){
+ if(CO._hor===undefined){CO._hor=null;sb.from("inst_horario").select("data,updated_at").eq("inst_id",INST.m.inst_id).then(({data})=>{CO._hor=(data||[])[0]||false;sched();});}
+ const r=CO._hor;const nd=r&&r.data&&r.data.docentes?Object.keys(r.data.docentes).length:0,nc=r&&r.data&&r.data.docentes?Object.values(r.data.docentes).reduce((s,x)=>s+x.length,0):0;
+ return `<div class="card"><h3>Horario institucional</h3>
+ <div class="sm">${r&&r.data&&r.data.fecha?`Publicado el <b>${fLoc(r.data.fecha)}</b> ${esc(new Date(r.data.fecha).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}))}: ${nc} clases para ${nd} docente(s).`:r===null?"Consultando…":"Aún no se ha publicado un horario."}</div>
+ <div class="row" style="margin-top:10px"><a class="btn pri" href="horarios.html">Abrir el generador de horarios</a></div></div>
+ <div class="card"><h3>Cómo se usa</h3><ol class="sm" style="padding-left:18px;margin:0">
+ <li>Verifica que los docentes ya se unieron y configuraron su <b>carga académica</b> (asignaturas y cursos). Si un docente escribió las horas semanales en su asignatura, también se traen.</li>
+ <li>En el generador toca <b>Traer datos de la institución</b>: se cargan cursos, asignaturas, docentes y la carga.</li>
+ <li>Completa en el generador la jornada, las horas que falten, salones, disponibilidad, proyectos y reuniones.</li>
+ <li>Genera el horario y revísalo.</li>
+ <li>Toca <b>Publicar horario a los docentes</b>: cada docente lo verá en su vista Semana con acceso directo a cada clase.</li></ol>
+ <div class="mut sm" style="margin-top:8px">El proyecto de horario se guarda en tu cuenta. Puedes volver a publicar cuando hagas cambios; los docentes reciben la versión nueva al abrir la aplicación.</div></div>`;}
 
 /* ---------- PORTAL DEL ESTUDIANTE ---------- */
 const PT={mats:[],pubs:[],err:"",loading:false,filtro:"",unirse:false,join:null,joinErr:"",q:""};let joinPend=null;
