@@ -295,7 +295,7 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 function renderLogin(){document.body.classList.add("nologin");$("#who").textContent="";
  $("#main").innerHTML=`<div class="login card"><h2>Aula Docente</h2><p class="mut sm">Registro de estudiantes, calificaciones, asistencia y evidencias. Cada docente tiene su propia cuenta y sus datos son privados.</p>
  <div class="seg" style="display:flex;margin-bottom:14px"><button style="flex:1" class="${UI.lt==="est"?"":"on"}" id="lt_d">Soy docente</button><button style="flex:1" class="${UI.lt==="est"?"on":""}" id="lt_e">Soy estudiante</button></div>
- <div id="lg_doc" style="${UI.lt==="est"?"display:none":""}"><button class="btn pri big" id="lg_g">Ingresar con Google</button><div class="or">o con correo y contraseña</div>
+ <div id="lg_doc" style="${UI.lt==="est"?"display:none":""}">${CFG.LOGIN_GOOGLE?`<button class="btn pri big" id="lg_g">Ingresar con Google</button><div class="or">o con correo y contraseña</div>`:""}
  <label class="f">Correo<input type="email" id="lg_e" autocomplete="email"></label><label class="f">Contraseña<input type="password" id="lg_p" autocomplete="current-password"></label>
  <div class="row"><button class="btn pri" id="lg_in">Ingresar</button><button class="btn" id="lg_up">Crear cuenta</button><span class="sp"></span><button class="lnk sm" id="lg_rec">Olvidé mi contraseña</button></div></div>
  <div id="lg_est" style="${UI.lt==="est"?"":"display:none"}"><label class="f">Código de clase<input type="text" id="le_c" autocapitalize="characters" autocomplete="off" placeholder="Te lo entrega tu docente"></label><p class="sm mut" style="margin-top:0">Después elegirás tu nombre de la lista de tu curso.</p><button class="btn pri big" id="le_ok">Continuar</button></div>
@@ -305,7 +305,7 @@ function renderLogin(){document.body.classList.add("nologin");$("#who").textCont
   joinPend={codigo:c};$("#le_ok").disabled=true;const {error}=await sb.auth.signInAnonymously();if(error){joinPend=null;$("#le_ok").disabled=false;msg(/anonymous/i.test(error.message)?"El ingreso de estudiantes no está habilitado. Avísale a tu docente.":error.message,true);}};
  const msg=(t,e)=>{const m=$("#lg_msg");m.textContent=t;m.style.color=e?"var(--bad)":"var(--ok)";};
  const back=location.origin+location.pathname;
- $("#lg_g").onclick=async()=>{const {error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:back}});if(error)msg("No se pudo iniciar con Google: "+error.message,true);};
+ if($("#lg_g"))$("#lg_g").onclick=async()=>{const {error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:back}});if(error)msg("No se pudo iniciar con Google: "+error.message,true);};
  const cred=()=>({email:$("#lg_e").value.trim(),password:$("#lg_p").value});
  $("#lg_in").onclick=async()=>{const c=cred();if(!c.email||!c.password)return msg("Escribe tu correo y contraseña.",true);const {error}=await sb.auth.signInWithPassword(c);if(error)msg(/Invalid login/i.test(error.message)?"Correo o contraseña incorrectos.":/confirm/i.test(error.message)?"Debes confirmar tu correo antes de ingresar.":error.message,true);};
  $("#lg_up").onclick=async()=>{const c=cred();if(!c.email||c.password.length<8)return msg("Escribe tu correo y una contraseña de al menos 8 caracteres.",true);const {data,error}=await sb.auth.signUp({...c,options:{emailRedirectTo:back}});if(error)return msg(error.message,true);if(!data.session)msg("Cuenta creada. Revisa tu correo y confirma la dirección para ingresar.");};

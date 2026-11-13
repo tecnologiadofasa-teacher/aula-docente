@@ -7,5 +7,7 @@
 window.AULA_CONFIG = {
   SUPABASE_URL: "https://kxjizqrbcyfqzdwmufzg.supabase.co",
   SUPABASE_KEY: "sb_publishable_Rc6g76ZZMmdIV509jkpmWQ__N7M0HfR",
-  GOOGLE_CLIENT_ID: ""
+  GOOGLE_CLIENT_ID: "",
+  // Cambiar a true cuando el proveedor Google esté activado en Supabase (Authentication → Sign In / Providers → Google)
+  LOGIN_GOOGLE: false
 };
