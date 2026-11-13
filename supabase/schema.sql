@@ -3,7 +3,7 @@
 -- Puede ejecutarse de nuevo sin perder datos.
 --
 -- Docentes: inician sesión con Google o correo. Cada docente solo ve y modifica sus registros.
--- Estudiantes: entran con una sesión anónima + código de clase + número de documento.
+-- Estudiantes: entran con una sesión anónima + código de clase + eligiendo su nombre de la lista.
 --   Solo pueden leer las publicaciones dirigidas a su clase o a ellos, y los archivos adjuntos de esas publicaciones.
 
 -- ¿La sesión es de un docente (no anónima)?
@@ -126,32 +126,65 @@ create policy "pub_estudiante" on public.publicaciones for select to authenticat
   ));
 
 ------------------------------------------------------------------
--- 5. Ingreso del estudiante con código + documento
+-- 5. Ingreso del estudiante: código de clase + elegir su nombre de la lista
+--    Cada nombre solo puede estar vinculado a una sesión por clase.
+--    El docente lo libera con "Quitar acceso".
 ------------------------------------------------------------------
-create or replace function public.unirse_clase(p_codigo text, p_documento text)
-returns json language plpgsql security definer set search_path = public as $$
-declare
-  c record; e record; v_doc text;
+delete from public.matriculas a using public.matriculas b
+ where a.codigo_id = b.codigo_id and a.est_id = b.est_id and a.created_at > b.created_at;
+create unique index if not exists matriculas_est_unico on public.matriculas (codigo_id, est_id);
+
+drop function if exists public.unirse_clase(text, text);
+drop function if exists public.alumnos_de_clase(text);
+
+-- Lista de nombres de la clase (solo nombres; ningún otro dato del estudiante).
+create function public.alumnos_de_clase(p_codigo text)
+returns json language plpgsql stable security definer set search_path = public as $$
+declare c record;
 begin
   if auth.uid() is null then return json_build_object('ok', false, 'error', 'sesion'); end if;
-  v_doc := regexp_replace(lower(coalesce(p_documento, '')), '[^a-z0-9]', '', 'g');
-  if length(v_doc) < 4 then return json_build_object('ok', false, 'error', 'documento'); end if;
+  select * into c from codigos where codigo = upper(trim(p_codigo)) and activo;
+  if not found then return json_build_object('ok', false, 'error', 'codigo'); end if;
+  return json_build_object('ok', true, 'clase', c.nombre, 'docente', c.docente, 'alumnos', coalesce((
+    select json_agg(json_build_object(
+             'id', d.id,
+             'nombre', trim(coalesce(d.data ->> 'apellidos', '') || ' ' || coalesce(d.data ->> 'nombres', '')),
+             'ocupado', exists (select 1 from matriculas m where m.codigo_id = c.id and m.est_id = d.id and m.auth_uid <> auth.uid()),
+             'mio', exists (select 1 from matriculas m where m.codigo_id = c.id and m.est_id = d.id and m.auth_uid = auth.uid()))
+           order by lower(coalesce(d.data ->> 'apellidos', '')), lower(coalesce(d.data ->> 'nombres', '')))
+    from docs d
+    where d.user_id = c.teacher_id and d.col = 'ests'
+      and d.data ->> 'cursoId' = c.curso_id
+      and coalesce((d.data ->> 'activo')::boolean, true)), '[]'::json));
+end $$;
+
+create function public.unirse_clase(p_codigo text, p_est_id text)
+returns json language plpgsql security definer set search_path = public as $$
+declare c record; e record;
+begin
+  if auth.uid() is null then return json_build_object('ok', false, 'error', 'sesion'); end if;
   select * into c from codigos where codigo = upper(trim(p_codigo)) and activo;
   if not found then return json_build_object('ok', false, 'error', 'codigo'); end if;
   select d.id, d.data into e from docs d
-   where d.user_id = c.teacher_id and d.col = 'ests'
+   where d.user_id = c.teacher_id and d.col = 'ests' and d.id = p_est_id
      and d.data ->> 'cursoId' = c.curso_id
-     and coalesce((d.data ->> 'activo')::boolean, true)
-     and regexp_replace(lower(coalesce(d.data ->> 'documento', '')), '[^a-z0-9]', '', 'g') = v_doc
-   limit 1;
-  if not found then return json_build_object('ok', false, 'error', 'documento'); end if;
+     and coalesce((d.data ->> 'activo')::boolean, true);
+  if not found then return json_build_object('ok', false, 'error', 'alumno'); end if;
+  if exists (select 1 from matriculas m where m.codigo_id = c.id and m.est_id = e.id and m.auth_uid <> auth.uid()) then
+    return json_build_object('ok', false, 'error', 'ocupado');
+  end if;
   insert into matriculas (auth_uid, teacher_id, codigo_id, est_id, curso_id, asig_id, nombre, clase, docente)
   values (auth.uid(), c.teacher_id, c.id, e.id, c.curso_id, c.asig_id,
           trim(coalesce(e.data ->> 'nombres', '') || ' ' || coalesce(e.data ->> 'apellidos', '')), c.nombre, c.docente)
   on conflict (auth_uid, codigo_id) do update set est_id = excluded.est_id, nombre = excluded.nombre, clase = excluded.clase, docente = excluded.docente;
   return json_build_object('ok', true, 'clase', c.nombre);
+exception when unique_violation then
+  return json_build_object('ok', false, 'error', 'ocupado');
 end $$;
+
+revoke all on function public.alumnos_de_clase(text) from public, anon;
 revoke all on function public.unirse_clase(text, text) from public, anon;
+grant execute on function public.alumnos_de_clase(text) to authenticated;
 grant execute on function public.unirse_clase(text, text) to authenticated;
 
 ------------------------------------------------------------------

@@ -164,6 +164,7 @@ body.nologin #gear{display:none}
 .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:17px;font-weight:700;letter-spacing:2px;background:var(--pri2);color:var(--pri);padding:4px 10px;border-radius:8px}
 .code.off{background:#eee;color:#888;text-decoration:line-through}
 .pub{border-bottom:1px solid var(--line);padding:10px 0}.pub:last-child{border-bottom:0}
+.nombres{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto}.nombres button{text-align:left;border:1px solid var(--line);background:#fff;border-radius:9px;padding:11px 12px;font-size:15px;cursor:pointer}.nombres button:hover:not(:disabled){border-color:var(--pri);background:var(--pri2)}.nombres button:disabled{color:var(--mut);background:#f6f7f8;cursor:default}
 .pickbox{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px 8px;margin-bottom:10px}
 .load{display:flex;align-items:center;justify-content:center;min-height:50vh;color:var(--mut);flex-direction:column;gap:8px;text-align:center;padding:20px}
 </style>
@@ -273,11 +274,11 @@ function renderLogin(){document.body.classList.add("nologin");$("#who").textCont
  <div id="lg_doc" style="${UI.lt==="est"?"display:none":""}"><button class="btn pri big" id="lg_g">Ingresar con Google</button><div class="or">o con correo y contraseña</div>
  <label class="f">Correo<input type="email" id="lg_e" autocomplete="email"></label><label class="f">Contraseña<input type="password" id="lg_p" autocomplete="current-password"></label>
  <div class="row"><button class="btn pri" id="lg_in">Ingresar</button><button class="btn" id="lg_up">Crear cuenta</button><span class="sp"></span><button class="lnk sm" id="lg_rec">Olvidé mi contraseña</button></div></div>
- <div id="lg_est" style="${UI.lt==="est"?"":"display:none"}"><label class="f">Código de clase<input type="text" id="le_c" autocapitalize="characters" autocomplete="off" placeholder="Te lo entrega tu docente"></label><label class="f">Número de documento<input type="text" id="le_d" inputmode="numeric" autocomplete="off"></label><button class="btn pri big" id="le_ok">Entrar a mi clase</button></div>
+ <div id="lg_est" style="${UI.lt==="est"?"":"display:none"}"><label class="f">Código de clase<input type="text" id="le_c" autocapitalize="characters" autocomplete="off" placeholder="Te lo entrega tu docente"></label><p class="sm mut" style="margin-top:0">Después elegirás tu nombre de la lista de tu curso.</p><button class="btn pri big" id="le_ok">Continuar</button></div>
  <div id="lg_msg" class="sm" style="margin-top:10px"></div></div>`;
  $("#lt_d").onclick=()=>{UI.lt="doc";renderLogin();};$("#lt_e").onclick=()=>{UI.lt="est";renderLogin();};
- $("#le_ok").onclick=async()=>{const c=$("#le_c").value.trim().toUpperCase(),d=$("#le_d").value.trim();if(!c||!d)return msg("Escribe el código de clase y tu número de documento.",true);
-  joinPend={codigo:c,doc:d};$("#le_ok").disabled=true;const {error}=await sb.auth.signInAnonymously();if(error){joinPend=null;$("#le_ok").disabled=false;msg(/anonymous/i.test(error.message)?"El ingreso de estudiantes no está habilitado. Avísale a tu docente.":error.message,true);}};
+ $("#le_ok").onclick=async()=>{const c=$("#le_c").value.trim().toUpperCase();if(!c)return msg("Escribe el código de clase.",true);
+  joinPend={codigo:c};$("#le_ok").disabled=true;const {error}=await sb.auth.signInAnonymously();if(error){joinPend=null;$("#le_ok").disabled=false;msg(/anonymous/i.test(error.message)?"El ingreso de estudiantes no está habilitado. Avísale a tu docente.":error.message,true);}};
  const msg=(t,e)=>{const m=$("#lg_msg");m.textContent=t;m.style.color=e?"var(--bad)":"var(--ok)";};
  const back=location.origin+location.pathname;
  $("#lg_g").onclick=async()=>{const {error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:back}});if(error)msg("No se pudo iniciar con Google: "+error.message,true);};
@@ -287,7 +288,7 @@ function renderLogin(){document.body.classList.add("nologin");$("#who").textCont
  $("#lg_rec").onclick=async()=>{const e=$("#lg_e").value.trim();if(!e)return msg("Escribe tu correo arriba.",true);const {error}=await sb.auth.resetPasswordForEmail(e,{redirectTo:back});msg(error?error.message:"Te enviamos un correo para restablecer la contraseña.",!!error);};
 }
 function formNuevaClave(){openModal(`<div class="hd"><h3>Nueva contraseña</h3><button class="x" data-close>×</button></div><label class="f">Nueva contraseña (mínimo 8 caracteres)<input type="password" id="nc_p" autocomplete="new-password"></label><div class="ft"><button class="btn pri" id="nc_ok">Guardar</button></div>`,sh=>{$("#nc_ok",sh).onclick=async()=>{const p=$("#nc_p").value;if(p.length<8)return toast("Mínimo 8 caracteres.",true);const {error}=await sb.auth.updateUser({password:p});if(error)return toast(error.message,true);closeModal();toast("Contraseña actualizada");};});}
-$("#who").addEventListener("click",async e=>{if(e.target.dataset.salir==null)return;if(!await ask(modoEst?"Para volver a entrar necesitarás el código de clase y tu número de documento. ¿Salir?":"¿Cerrar la sesión en este dispositivo?","Salir"))return;driveTok=null;await sb.auth.signOut();});
+$("#who").addEventListener("click",async e=>{if(e.target.dataset.salir==null)return;if(!await ask(modoEst?"Si sales, tu nombre seguirá vinculado a este dispositivo y para volver a entrar tu docente tendrá que liberarlo. ¿Salir de todos modos?":"¿Cerrar la sesión en este dispositivo?","Salir"))return;driveTok=null;await sb.auth.signOut();});
 let instEv=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();instEv=e;sched();});
 window.addEventListener("appinstalled",()=>{instEv=null;toast("Aplicación instalada");sched();});
 if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
@@ -887,10 +888,10 @@ function vAula(){
  const cs=combosClase();
  let h=`<div class="row" style="margin-bottom:10px"><h2 style="margin:0" class="sp">Aula virtual</h2><button class="btn sm" data-go="avRec">Actualizar</button><button class="btn pri" data-go="pub">+ Publicación</button></div>`;
  if(AV.err)h+=`<div class="banner e">${esc(AV.err)}</div>`;
- h+=`<div class="banner i">Tus estudiantes entran en <b>${esc(appURL())}</b>, eligen “Soy estudiante” y escriben el código de su clase y su número de documento. Solo ven las publicaciones dirigidas a su clase o a ellos.</div>`;
+ h+=`<div class="banner i">Tus estudiantes entran en <b>${esc(appURL())}</b>, eligen “Soy estudiante”, escriben el código de su clase y tocan su nombre en la lista del curso. Cada nombre queda vinculado a un solo dispositivo; si alguien eligió un nombre equivocado, usa “Quitar acceso” para liberarlo. Solo ven las publicaciones dirigidas a su clase o a ellos.</div>`;
  h+=`<div class="card"><h3>Publicaciones</h3>${AV.pubs.length?AV.pubs.map(p=>`<div class="pub"><div class="row"><div class="sp"><b>${esc(p.titulo)}</b><div class="mut sm">${fLoc(p.created_at)} · ${esc(destinoTxt(p))}</div></div><button class="btn sm" data-pub="${esc(p.id)}">Editar</button></div>${p.cuerpo?`<div class="sm" style="margin-top:6px">${textoHTML(p.cuerpo.length>280?p.cuerpo.slice(0,280)+"…":p.cuerpo)}</div>`:""}${archivosHTML(p.archivos)}</div>`).join(""):'<div class="mut sm">Aún no has publicado mensajes ni materiales.</div>'}</div>`;
- h+=`<div class="card"><h3>Códigos de clase</h3>${cs.length?`<div class="list">${cs.map(x=>{const cod=AV.codigos.find(c=>c.curso_id===x.c.id&&c.asig_id===x.a.id);const n=AV.mats.filter(m=>m.curso_id===x.c.id&&m.asig_id===x.a.id).length;const sinDoc=estsCurso(x.c.id).filter(e=>!String(e.documento||"").trim()).length;
-  return `<div class="it" style="flex-wrap:wrap"><div class="nm"><b>${esc(x.nombre)}</b><span class="mut sm">${n} estudiante(s) conectado(s)${sinDoc?` · <span style="color:var(--warn)">${sinDoc} sin documento registrado</span>`:""}</span></div>${cod?`<span class="code ${cod.activo?"":"off"}">${esc(cod.codigo)}</span><div class="row" style="gap:4px"><button class="btn sm" data-cod="copiar" data-id="${cod.id}">Copiar invitación</button><button class="btn sm" data-cod="nuevo" data-id="${cod.id}">Cambiar</button><button class="btn sm ${cod.activo?"dan":""}" data-cod="${cod.activo?"off":"on"}" data-id="${cod.id}">${cod.activo?"Desactivar":"Activar"}</button></div>`:`<button class="btn sm pri" data-cod="crear" data-k="${esc(x.k)}">Generar código</button>`}</div>`;}).join("")}</div>`:'<div class="mut sm">Crea cursos y asígnalos a tus asignaturas para generar códigos.</div>'}
+ h+=`<div class="card"><h3>Códigos de clase</h3>${cs.length?`<div class="list">${cs.map(x=>{const cod=AV.codigos.find(c=>c.curso_id===x.c.id&&c.asig_id===x.a.id);const n=AV.mats.filter(m=>m.curso_id===x.c.id&&m.asig_id===x.a.id).length;
+  return `<div class="it" style="flex-wrap:wrap"><div class="nm"><b>${esc(x.nombre)}</b><span class="mut sm">${n} estudiante(s) conectado(s)</span></div>${cod?`<span class="code ${cod.activo?"":"off"}">${esc(cod.codigo)}</span><div class="row" style="gap:4px"><button class="btn sm" data-cod="copiar" data-id="${cod.id}">Copiar invitación</button><button class="btn sm" data-cod="nuevo" data-id="${cod.id}">Cambiar</button><button class="btn sm ${cod.activo?"dan":""}" data-cod="${cod.activo?"off":"on"}" data-id="${cod.id}">${cod.activo?"Desactivar":"Activar"}</button></div>`:`<button class="btn sm pri" data-cod="crear" data-k="${esc(x.k)}">Generar código</button>`}</div>`;}).join("")}</div>`:'<div class="mut sm">Crea cursos y asígnalos a tus asignaturas para generar códigos.</div>'}
  <div class="mut sm" style="margin-top:8px">Cambiar el código impide nuevos ingresos con el anterior; los estudiantes ya conectados siguen dentro. Desactivarlo bloquea a toda la clase.</div></div>`;
  const porClase={};for(const m of AV.mats)(porClase[claseKey(m.curso_id,m.asig_id)]=porClase[claseKey(m.curso_id,m.asig_id)]||[]).push(m);
  h+=`<div class="card"><h3>Estudiantes conectados</h3>${Object.keys(porClase).length?Object.entries(porClase).map(([k,ms])=>{const x=cs.find(c=>c.k===k);return `<div style="margin-bottom:10px"><div class="sm" style="font-weight:650;margin-bottom:4px">${esc(x?x.nombre:"Clase eliminada")}</div><div class="list">${ms.map(m=>{const e=S.ests[m.est_id];return `<div class="it">${e?av(e,"s"):""}<div class="nm"><b>${esc(e?nomEst(e):m.nombre)}</b><span class="mut sm">Desde ${fLoc(m.created_at)}</span></div><button class="btn sm dan" data-quitar="${esc(m.id)}">Quitar acceso</button></div>`;}).join("")}</div></div>`;}).join(""):'<div class="mut sm">Ningún estudiante ha ingresado todavía.</div>'}</div>`;
@@ -904,7 +905,7 @@ async function accionCodigo(op,el){
    for(let i=0;i<6;i++){const {error}=await sb.from("codigos").insert({teacher_id:uid,codigo:nuevoCod(),curso_id:cid,asig_id:aid,nombre:`${a.nombre} · ${c.nombre}`,grado:String(c.grado||""),docente:cfg().docente||""});if(!error)break;if(error.code!=="23505"||i===5)throw error;}
    toast("Código creado");}
   else{const cod=AV.codigos.find(c=>c.id===el.dataset.id);if(!cod)return;
-   if(op==="copiar"){const t=`Únete a la clase ${cod.nombre} en Aula Docente:\n1. Abre ${appURL()}\n2. Elige "Soy estudiante".\n3. Escribe el código ${cod.codigo} y tu número de documento.`;
+   if(op==="copiar"){const t=`Únete a la clase ${cod.nombre} en Aula Docente:\n1. Abre ${appURL()}\n2. Elige "Soy estudiante".\n3. Escribe el código ${cod.codigo} y toca tu nombre en la lista.`;
     try{await navigator.clipboard.writeText(t);toast("Invitación copiada. Pégala en WhatsApp o en el correo.");}catch(e){openModal(`<div class="hd"><h3>Invitación</h3><button class="x" data-close>×</button></div><textarea style="min-height:140px" readonly>${esc(t)}</textarea><p class="sm mut">Selecciona el texto y cópialo.</p>`);}return;}
    if(op==="nuevo"){if(!await ask("Se generará un código nuevo y el actual dejará de servir para nuevos ingresos. Los estudiantes ya conectados siguen dentro. ¿Continuar?","Cambiar código"))return;
     for(let i=0;i<6;i++){const {error}=await sb.from("codigos").update({codigo:nuevoCod()}).eq("id",cod.id);if(!error)break;if(error.code!=="23505"||i===5)throw error;}toast("Código cambiado");}
@@ -914,7 +915,7 @@ async function accionCodigo(op,el){
  }catch(e){toast(avErr(e),true);}
  await loadAula();
 }
-async function quitarAcceso(id){if(!await ask("El estudiante dejará de ver las publicaciones de esta clase. Podrá volver a entrar con el código si lo conoce; para impedirlo, cambia el código. ¿Quitar acceso?","Quitar",true))return;
+async function quitarAcceso(id){if(!await ask("El estudiante dejará de ver las publicaciones de esta clase. Su nombre queda libre para elegirse de nuevo con el código; para impedir nuevos ingresos, cambia el código. ¿Quitar acceso?","Quitar",true))return;
  const {error}=await sb.from("matriculas").delete().eq("id",id);if(error)toast(avErr(error),true);await loadAula();}
 function formPub(p){
  const nuevo=!p;const pre=UI.pubPre||{};UI.pubPre=null;
@@ -962,16 +963,24 @@ function formPub(p){
 }
 
 /* ---------- PORTAL DEL ESTUDIANTE ---------- */
-const PT={mats:[],pubs:[],err:"",loading:false,filtro:"",unirse:false};let joinPend=null;
+const PT={mats:[],pubs:[],err:"",loading:false,filtro:"",unirse:false,join:null,joinErr:"",q:""};let joinPend=null;
 async function loadPortal(){if(PT.loading)return;PT.loading=true;$("#main").innerHTML=`<div class="load">Cargando tus clases…</div>`;
- if(joinPend){const j=joinPend;joinPend=null;await unirse(j.codigo,j.doc,true);}
+ if(joinPend){const j=joinPend;joinPend=null;await buscarClase(j.codigo);}
  try{const [m,p]=await Promise.all([sb.from("matriculas").select("*").eq("auth_uid",uid),sb.from("publicaciones").select("*").order("created_at",{ascending:false}).limit(300)]);
   if(m.error)throw m.error;if(p.error)throw p.error;PT.mats=m.data;PT.pubs=p.data;PT.err="";await firmar(PT.pubs.flatMap(x=>(x.archivos||[]).map(f=>f.path)));}catch(e){PT.err=avErr(e);}
  PT.loading=false;renderPortal();}
-async function unirse(codigo,doc,silencio){const {data,error}=await sb.rpc("unirse_clase",{p_codigo:codigo,p_documento:doc});
- const r=error?{ok:false,error:"red",msg:error.message}:(data||{});
- if(!r.ok){PT.joinErr=r.error==="codigo"?"El código de clase no existe o está desactivado. Revísalo con tu docente.":r.error==="documento"?"Tu número de documento no aparece en esa clase. Revísalo o pide a tu docente que lo registre.":"No fue posible ingresar"+(r.msg?": "+r.msg:".");PT.unirse=true;return false;}
- PT.joinErr="";PT.unirse=false;if(!silencio)toast("Te uniste a "+(r.clase||"la clase"));return true;}
+async function buscarClase(codigo){const {data,error}=await sb.rpc("alumnos_de_clase",{p_codigo:codigo});const r=error?{ok:false,error:"red",msg:error.message}:(data||{});
+ if(!r.ok){PT.join=null;PT.unirse=true;PT.joinErr=r.error==="codigo"?"Ese código de clase no existe o está desactivado. Revísalo con tu docente.":"No fue posible consultar la clase"+(r.msg?": "+r.msg:".");return false;}
+ PT.join={codigo:codigo,clase:r.clase,docente:r.docente,lista:r.alumnos||[]};PT.joinErr="";PT.unirse=true;PT.q="";return true;}
+async function unirse(est){const j=PT.join;const {data,error}=await sb.rpc("unirse_clase",{p_codigo:j.codigo,p_est_id:est.id});const r=error?{ok:false,error:"red",msg:error.message}:(data||{});
+ if(!r.ok){PT.joinErr=r.error==="ocupado"?`El nombre “${est.nombre}” ya fue elegido en otro dispositivo. Si eres tú, pídele a tu docente que libere tu nombre.`:r.error==="codigo"?"El código ya no está activo. Pide uno nuevo a tu docente.":r.error==="alumno"?"Ese nombre ya no está en la lista. Vuelve a buscar la clase.":"No fue posible ingresar"+(r.msg?": "+r.msg:".");await buscarClase(j.codigo);return false;}
+ PT.join=null;PT.joinErr="";PT.unirse=false;toast("Bienvenido a "+(r.clase||"la clase"));return true;}
+function formUnirse(){const j=PT.join,err=PT.joinErr?`<div class="banner e">${esc(PT.joinErr)}</div>`:"";
+ if(!j)return `<div class="card"><h3>${PT.mats.length?"Unirme a otra clase":"Ingresa a tu clase"}</h3><label class="f">Código de clase<input type="text" id="j_c" autocapitalize="characters" autocomplete="off" placeholder="Te lo entrega tu docente"></label>${err}<button class="btn pri" id="j_ok">Continuar</button></div>`;
+ const q=PT.q.trim().toLowerCase();const lista=j.lista.filter(a=>!q||a.nombre.toLowerCase().includes(q));
+ return `<div class="card"><h3>${esc(j.clase)}</h3><div class="mut sm" style="margin-bottom:10px">${j.docente?esc(j.docente)+" · ":""}Busca tu nombre y tócalo.</div>${err}
+ <input type="search" id="j_q" placeholder="Escribe tu apellido" value="${esc(PT.q)}" style="margin-bottom:8px"><div class="nombres">${lista.length?lista.map(a=>`<button data-alu="${esc(a.id)}" ${a.ocupado?"disabled":""}>${esc(a.nombre)}${a.mio?' <span class="tag ok">Tú</span>':a.ocupado?' <span class="tag">Ya ingresó</span>':""}</button>`).join(""):'<div class="mut sm">No hay nombres que coincidan.</div>'}</div>
+ <div class="mut sm" style="margin-top:8px">¿No apareces o tu nombre ya figura como “Ya ingresó”? Avísale a tu docente.</div><button class="lnk sm" id="j_x" style="margin-top:8px">Usar otro código</button></div>`;}
 function renderPortal(){
  document.body.classList.add("nologin");
  const mats=PT.mats;const nombre=(mats[0]&&mats[0].nombre||"").split(" ")[0];
@@ -979,21 +988,24 @@ function renderPortal(){
  const clases=mats.map(m=>({k:claseKey(m.curso_id,m.asig_id),t:m.clase,d:m.docente,tid:m.teacher_id}));
  const visibles=PT.pubs.filter(p=>!PT.filtro||clases.some(c=>c.k===PT.filtro&&c.tid===p.teacher_id&&(p.clases||[]).includes(c.k)));
  const clasesDe=p=>clases.filter(c=>c.tid===p.teacher_id&&(p.clases||[]).includes(c.k)).map(c=>c.t).join(", ");
- const form=`<div class="card"><h3>${mats.length?"Unirme a otra clase":"Ingresa a tu clase"}</h3><div class="f2"><label class="f">Código de clase<input type="text" id="j_c" autocapitalize="characters" autocomplete="off" placeholder="Ej.: K7M2QX9"></label><label class="f">Número de documento<input type="text" id="j_d" inputmode="numeric" autocomplete="off"></label></div>${PT.joinErr?`<div class="banner e">${esc(PT.joinErr)}</div>`:""}<button class="btn pri" id="j_ok">Ingresar</button></div>`;
  let h=`<h2>${nombre?"Hola, "+esc(nombre):"Aula virtual"}</h2>`;
  if(PT.err)h+=`<div class="banner e">${esc(PT.err)}</div>`;
- if(!mats.length)h+=form;
+ if(!mats.length)h+=formUnirse();
  else{h+=`<div class="row" style="margin-bottom:10px"><select id="pt_f" style="flex:1 1 200px"><option value="">Todas mis clases</option>${clases.map(c=>`<option value="${esc(c.k)}" ${PT.filtro===c.k?"selected":""}>${esc(c.t)}</option>`).join("")}</select><button class="btn" id="pt_r">Actualizar</button><button class="btn" id="pt_u">Otra clase</button></div>`;
-  if(PT.unirse)h+=form;
+  if(PT.unirse)h+=formUnirse();
   h+=visibles.length?visibles.map(p=>`<div class="card"><div class="mut sm">${esc(clasesDe(p))} · ${fLoc(p.created_at)}</div><h3 style="margin:4px 0 6px">${esc(p.titulo)}</h3>${p.cuerpo?`<div style="font-size:15px">${textoHTML(p.cuerpo)}</div>`:""}${archivosHTML(p.archivos)}</div>`).join(""):`<div class="card empty">Tu docente aún no ha publicado mensajes ni materiales.</div>`;
   h+=`<div class="mut sm" style="text-align:center;margin-top:10px">${clases.map(c=>esc(c.t)+(c.d?" · "+esc(c.d):"")).join("<br>")}</div>`;}
  $("#main").innerHTML=h;
- const jo=$("#j_ok");if(jo)jo.onclick=async()=>{const c=$("#j_c").value.trim().toUpperCase(),d=$("#j_d").value.trim();if(!c||!d){PT.joinErr="Escribe el código de clase y tu número de documento.";return renderPortal();}jo.disabled=true;if(await unirse(c,d))return loadPortal();renderPortal();};
+ const jo=$("#j_ok");if(jo)jo.onclick=async()=>{const c=$("#j_c").value.trim().toUpperCase();if(!c){PT.joinErr="Escribe el código de clase.";return renderPortal();}jo.disabled=true;await buscarClase(c);renderPortal();};
+ const jq=$("#j_q");if(jq)jq.oninput=()=>{PT.q=jq.value;const pos=jq.selectionStart;renderPortal();const n=$("#j_q");n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}};
+ const jx=$("#j_x");if(jx)jx.onclick=()=>{PT.join=null;PT.joinErr="";renderPortal();};
+ $$("[data-alu]").forEach(b=>b.onclick=async()=>{const a=PT.join.lista.find(x=>x.id===b.dataset.alu);if(!a)return;
+  if(a.mio){PT.join=null;PT.unirse=false;return loadPortal();}
+  if(!await ask(`¿Eres ${a.nombre}? Tu nombre quedará vinculado a este dispositivo.`,"Sí, soy yo"))return;if(await unirse(a))loadPortal();else renderPortal();});
  const f=$("#pt_f");if(f)f.onchange=()=>{PT.filtro=f.value;renderPortal();};
  const r=$("#pt_r");if(r)r.onclick=()=>loadPortal();
- const u=$("#pt_u");if(u)u.onclick=()=>{PT.unirse=!PT.unirse;PT.joinErr="";renderPortal();};
+ const u=$("#pt_u");if(u)u.onclick=()=>{PT.unirse=!PT.unirse;PT.join=null;PT.joinErr="";renderPortal();};
 }
-
 readHash();renderNav();boot();
 </script>
 </body>

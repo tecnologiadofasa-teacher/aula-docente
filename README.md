@@ -19,7 +19,7 @@ Funciona como sitio estático en **GitHub Pages**, con **Supabase** para el inic
 
 1. Crea un proyecto gratuito en https://supabase.com.
 2. En **SQL Editor → New query**, pega el contenido de `supabase/schema.sql` y pulsa **Run**. Crea las tablas, las reglas de seguridad y el depósito privado de archivos `materiales`. Puedes ejecutarlo otra vez cuando se actualice la aplicación; no borra datos.
-3. En **Authentication → Sign In / Providers**, activa **Allow anonymous sign-ins**. Es la forma en que entran los estudiantes (sin correo ni contraseña, con código de clase y número de documento). Se recomienda activar también la protección CAPTCHA de Supabase si la dirección se difunde ampliamente.
+3. En **Authentication → Sign In / Providers**, activa **Allow anonymous sign-ins**. Es la forma en que entran los estudiantes (sin correo ni contraseña, con el código de clase y eligiendo su nombre). Se recomienda activar también la protección CAPTCHA de Supabase si la dirección se difunde ampliamente.
 4. En **Project Settings → API** copia la *Project URL* y la clave **anon** (o *publishable*). No uses nunca la clave `service_role` ni `secret` en el navegador.
 5. En **Authentication → URL Configuration**:
    - *Site URL*: `https://TU_USUARIO.github.io/aula-docente/`
@@ -56,7 +56,7 @@ En **Ajustes → Horario de clases** se registran los bloques de la semana (día
 ## Aula virtual y acceso de estudiantes
 
 1. En **Aula virtual**, genera un código para cada clase (curso + asignatura) y usa **Copiar invitación** para enviarlo por WhatsApp o correo.
-2. El estudiante abre la dirección de la aplicación, elige **Soy estudiante** y escribe el código y su número de documento. El documento debe coincidir con el registrado en su ficha.
+2. El estudiante abre la dirección de la aplicación, elige **Soy estudiante**, escribe el código y toca su nombre en la lista del curso. Cada nombre queda vinculado a un solo dispositivo: si alguien ya lo eligió aparece como “Ya ingresó”. Si un estudiante eligió un nombre equivocado o cambió de teléfono, usa **Quitar acceso** para liberar el nombre.
 3. Las publicaciones (mensaje, instrucciones, archivos de hasta 50 MB y enlaces) se dirigen a una o varias clases, a todo un grado o solo a algunos estudiantes.
 4. El estudiante solo ve las publicaciones dirigidas a su clase o a él; no ve notas, asistencia ni datos de compañeros.
 5. **Cambiar** el código impide nuevos ingresos con el anterior; **Desactivar** bloquea a toda la clase; **Quitar acceso** desconecta a un estudiante. Al eliminar o retirar un estudiante también se le quita el acceso.
@@ -76,7 +76,7 @@ Comparte la dirección de GitHub Pages. Cada docente crea su cuenta y empieza co
 
 - La clave de `config.js` es pública por diseño; la protección la dan las políticas RLS de `schema.sql`.
 - Las sesiones de estudiante (anónimas) no pueden leer ni escribir los registros del docente; solo leen sus publicaciones y los archivos adjuntos de estas, mediante enlaces firmados que vencen en una hora.
-- El acceso de estudiantes depende del código y del número de documento. Si un código circula fuera de la clase, cámbialo.
+- El acceso de estudiantes depende del código de clase. Quien tenga el código ve la lista de nombres del curso (solo nombres). Revisa en **Estudiantes conectados** que cada nombre corresponda a quien es, y si un código circula fuera de la clase, cámbialo.
 - Las fotografías se guardan como miniaturas dentro de la base de datos.
 - Los datos de menores requieren la autorización de los acudientes (Ley 1581 de 2012). La ficha del estudiante incluye un campo para registrarla.
 - **Ajustes → Copia de seguridad** descarga todos los registros en un archivo `.json` que puede restaurarse.
