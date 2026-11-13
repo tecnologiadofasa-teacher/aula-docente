@@ -326,10 +326,12 @@ drop policy if exists "excusas_coord" on public.excusas;
 create policy "excusas_coord" on public.excusas for all to authenticated using (public.es_coord_de(inst_id)) with check (public.es_coord_de(inst_id));
 
 -- Los docentes solo reciben las fechas de las excusas aprobadas (no el motivo).
-create or replace function public.excusas_aprobadas()
-returns table (curso text, est_key text, est_doc text, desde date, hasta date)
+alter table public.excusas add column if not exists est_id text not null default '';
+drop function if exists public.excusas_aprobadas();
+create function public.excusas_aprobadas()
+returns table (curso text, est_key text, est_doc text, est_id text, desde date, hasta date)
 language sql stable security definer set search_path = public as $$
-  select e.curso, e.est_key, e.est_doc, e.desde, e.hasta
+  select e.curso, e.est_key, e.est_doc, e.est_id, e.desde, e.hasta
   from excusas e join miembros m on m.inst_id = e.inst_id and m.user_id = auth.uid()
   where e.estado = 'aprobada'
 $$;
@@ -352,3 +354,67 @@ create trigger docs_actualizacion before insert or update on public.docs
   for each row execute function public.marcar_actualizacion();
 create index if not exists docs_usuario_fecha on public.docs (user_id, updated_at);
 create index if not exists docs_col_fecha on public.docs (col, updated_at);
+
+------------------------------------------------------------------
+-- 10. Listas oficiales (las administra coordinación) y carga académica
+--     Coordinación crea cursos, asignaturas y estudiantes; los docentes
+--     de la institución solo los leen para armar su carga académica.
+------------------------------------------------------------------
+create table if not exists public.inst_cursos (
+  id         text primary key default replace(gen_random_uuid()::text, '-', ''),
+  inst_id    uuid not null references public.instituciones (id) on delete cascade,
+  nombre     text not null,
+  grado      text not null default '',
+  jornada    text not null default '',
+  director   text not null default '',
+  updated_at timestamptz not null default now(),
+  unique (inst_id, nombre)
+);
+create table if not exists public.inst_asignaturas (
+  id         text primary key default replace(gen_random_uuid()::text, '-', ''),
+  inst_id    uuid not null references public.instituciones (id) on delete cascade,
+  nombre     text not null,
+  area       text not null default '',
+  updated_at timestamptz not null default now(),
+  unique (inst_id, nombre)
+);
+create table if not exists public.inst_estudiantes (
+  id         text primary key default replace(gen_random_uuid()::text, '-', ''),
+  inst_id    uuid not null references public.instituciones (id) on delete cascade,
+  curso_id   text not null references public.inst_cursos (id) on delete restrict,
+  apellidos  text not null default '',
+  nombres    text not null default '',
+  tipo_doc   text not null default 'TI',
+  documento  text not null default '',
+  acudiente  text not null default '',
+  telefono   text not null default '',
+  correo     text not null default '',
+  activo     boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+create index if not exists inst_estudiantes_curso on public.inst_estudiantes (inst_id, curso_id);
+drop trigger if exists inst_cursos_act on public.inst_cursos;
+drop trigger if exists inst_asig_act on public.inst_asignaturas;
+drop trigger if exists inst_est_act on public.inst_estudiantes;
+create trigger inst_cursos_act before insert or update on public.inst_cursos for each row execute function public.marcar_actualizacion();
+create trigger inst_asig_act before insert or update on public.inst_asignaturas for each row execute function public.marcar_actualizacion();
+create trigger inst_est_act before insert or update on public.inst_estudiantes for each row execute function public.marcar_actualizacion();
+
+alter table public.inst_cursos enable row level security;
+alter table public.inst_asignaturas enable row level security;
+alter table public.inst_estudiantes enable row level security;
+drop policy if exists "icur_leer" on public.inst_cursos;
+drop policy if exists "icur_coord" on public.inst_cursos;
+drop policy if exists "iasi_leer" on public.inst_asignaturas;
+drop policy if exists "iasi_coord" on public.inst_asignaturas;
+drop policy if exists "iest_leer" on public.inst_estudiantes;
+drop policy if exists "iest_coord" on public.inst_estudiantes;
+create policy "icur_leer" on public.inst_cursos for select to authenticated using (inst_id = public.mi_institucion() and public.es_docente());
+create policy "icur_coord" on public.inst_cursos for all to authenticated using (public.es_coord_de(inst_id)) with check (public.es_coord_de(inst_id));
+create policy "iasi_leer" on public.inst_asignaturas for select to authenticated using (inst_id = public.mi_institucion() and public.es_docente());
+create policy "iasi_coord" on public.inst_asignaturas for all to authenticated using (public.es_coord_de(inst_id)) with check (public.es_coord_de(inst_id));
+create policy "iest_leer" on public.inst_estudiantes for select to authenticated using (inst_id = public.mi_institucion() and public.es_docente());
+create policy "iest_coord" on public.inst_estudiantes for all to authenticated using (public.es_coord_de(inst_id)) with check (public.es_coord_de(inst_id));
+revoke all on public.inst_cursos, public.inst_asignaturas, public.inst_estudiantes from anon;
+grant select, insert, update, delete on public.inst_cursos, public.inst_asignaturas, public.inst_estudiantes to authenticated;
+

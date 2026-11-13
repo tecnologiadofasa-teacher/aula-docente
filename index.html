@@ -391,7 +391,7 @@ function renderMain(){
 /* ---------- INICIO ---------- */
 function vInicio(){
  const c=cfg(),cur=S.cursos[ctx.c],as=S.asigs[ctx.a],per=c.periodos.find(p=>p.id===ctx.p);
- const pasos=[[!!(S.cfg&&S.cfg.docente),"Registrar tus datos e institución","datos"],[cursosArr().length>0,"Crear al menos un curso","curso"],[Object.keys(S.asigs).length>0,"Crear una asignatura y su forma de calificar","asig"],[Object.keys(S.ests).length>0,"Registrar estudiantes con fotografía","est"],[horario().length>0,"Registrar tu horario de clases","horario"]];
+ const pasos=modoOficial()?[[!!(S.cfg&&S.cfg.docente),"Registrar tus datos","datos"],[Object.values(S.asigs).some(a=>(a.cursoIds||[]).length),"Configurar tu carga académica","carga"],[horario().length>0,"Registrar tu horario de clases","horario"]]:[[!!(S.cfg&&S.cfg.docente),"Registrar tus datos e institución","datos"],[cursosArr().length>0,"Crear al menos un curso","curso"],[Object.keys(S.asigs).length>0,"Crear una asignatura y su forma de calificar","asig"],[Object.keys(S.ests).length>0,"Registrar estudiantes con fotografía","est"],[horario().length>0,"Registrar tu horario de clases","horario"]];
  let h=`<h2>${c.docente?"Hola, "+esc(c.docente.split(" ")[0]):"Bienvenido"}</h2>`;
  const calH=calendarioHTML();
  if(pasos.some(p=>!p[0]))h+=`<div class="card"><h3>Primeros pasos</h3><div class="list">${pasos.map(([ok,t,a])=>`<div class="it"><span class="tag ${ok?"ok":""}">${ok?"Listo":"Pendiente"}</span><div class="nm">${t}</div>${ok?"":`<button class="btn sm" data-go="${a}">Hacer</button>`}</div>`).join("")}</div></div>`;
@@ -406,7 +406,7 @@ function vInicio(){
   <div class="stat"><div class="v">${ns?fmt(sp/ns):"—"}</div><div class="l">Promedio del periodo</div></div>
   <div class="stat"><div class="v">${na?Math.round(sa/na)+"%":"—"}</div><div class="l">Asistencia promedio</div></div>
   <div class="stat"><div class="v">${nev}</div><div class="l">Evidencias del periodo</div></div></div>
-  ${instEv?`<div class="banner i row"><span class="sp">Instala Aula Docente en este dispositivo para abrirla desde su propio ícono.</span><button class="btn sm pri" data-go="instalar">Instalar</button></div>`:""}<div class="row" style="margin-bottom:12px"><a class="btn pri" href="#asistencia">Tomar asistencia</a><button class="btn" data-go="act">Nueva actividad</button><button class="btn" data-go="ev">Subir evidencia</button><button class="btn" data-go="est">Registrar estudiante</button></div>
+  ${instEv?`<div class="banner i row"><span class="sp">Instala Aula Docente en este dispositivo para abrirla desde su propio ícono.</span><button class="btn sm pri" data-go="instalar">Instalar</button></div>`:""}<div class="row" style="margin-bottom:12px"><a class="btn pri" href="#asistencia">Tomar asistencia</a><button class="btn" data-go="act">Nueva actividad</button><button class="btn" data-go="ev">Subir evidencia</button>${modoOficial()?"":`<button class="btn" data-go="est">Registrar estudiante</button>`}</div>
   <div class="card"><h3>Seguimiento</h3>${riesgo.length?`<div class="list">${riesgo.map(([e,m])=>`<div class="it" data-est="${e.id}" style="cursor:pointer">${av(e,"s")}<div class="nm"><b>${esc(nomEst(e))}</b></div>${m.map(x=>`<span class="tag bad">${esc(x)}</span>`).join(" ")}</div>`).join("")}</div>`:`<div class="mut sm">Sin estudiantes por debajo de la nota aprobatoria (${esc(c.escala.aprob)}) ni con ${esc(c.alertaFallas)} o más fallas en este periodo.</div>`}</div>`;
  }
  h+=`<div class="card"><h3>Seguridad y privacidad</h3><div class="sm mut">Ingresas con tu cuenta de Google o con correo y contraseña. La base de datos aplica seguridad por filas: cada docente solo puede leer y modificar sus propios registros, aunque varias personas usen la misma aplicación. Las evidencias se guardan en tu Google Drive con los permisos que tú definas allí. Recuerda contar con la autorización de los acudientes para el tratamiento de datos e imagen de menores (Ley 1581 de 2012).</div></div>`;
@@ -417,7 +417,7 @@ function vInicio(){
 function vEstudiantes(){
  if(!cursosArr().length)return need("Primero crea un curso en Ajustes.");
  if(UI.cursoFiltro==null)UI.cursoFiltro=ctx.c;
- return `<div class="row" style="margin-bottom:10px"><h2 style="margin:0" class="sp">Estudiantes</h2>${UI.selMode?`<button class="btn" data-go="selOff">Terminar selección</button>`:`<button class="btn" data-go="selOn">Seleccionar</button><button class="btn" data-go="imp">Importar lista</button><button class="btn pri" data-go="est">+ Registrar</button>`}</div>
+ return `<div class="row" style="margin-bottom:10px"><h2 style="margin:0" class="sp">Estudiantes</h2>${modoOficial()?`<button class="btn" data-go="carga">Mi carga académica</button>`:UI.selMode?`<button class="btn" data-go="selOff">Terminar selección</button>`:`<button class="btn" data-go="selOn">Seleccionar</button><button class="btn" data-go="imp">Importar lista</button><button class="btn pri" data-go="est">+ Registrar</button>`}</div>${modoOficial()?`<div class="banner i sm">Las listas las administra coordinación. Aquí puedes tomar la foto, escribir observaciones y registrar la autorización de datos. Si falta un estudiante o hay un error en un nombre, avísale a coordinación.</div>`:""}
  <div class="row" style="margin-bottom:12px"><select id="fCur" style="width:auto;flex:0 1 200px"><option value="">Todos los cursos</option>${cursosArr().map(c=>`<option value="${c.id}" ${c.id===UI.cursoFiltro?"selected":""}>${esc(c.nombre)}</option>`).join("")}<option value="__ret" ${UI.cursoFiltro==="__ret"?"selected":""}>Retirados</option></select><input type="search" id="q" placeholder="Buscar por nombre o documento" value="${esc(UI.q)}" style="flex:1 1 200px"></div><div id="selBar"></div><div id="estList"></div>`;
 }
 function renderEstList(){
@@ -469,6 +469,8 @@ function formEst(e,cursoDef){
   const setF=async inp=>{const f=inp.files[0];if(!f)return;try{foto=await resizeImg(f);$("#fprev").innerHTML=av({...e,foto},"l");}catch(x){toast("No se pudo leer la imagen.",true);}inp.value="";};
   $("#fcam",sh).onchange=ev=>setF(ev.target);$("#fgal",sh).onchange=ev=>setF(ev.target);
   $("#fdel",sh).onclick=()=>{foto="";$("#fprev").innerHTML=av({...e,foto:""},"l");};
+  if(e.oficial&&modoOficial()){["#e_ap","#e_no","#e_td","#e_doc","#e_cur","#e_fn","#e_acu","#e_tel","#e_mail"].forEach(s=>{const x=$(s,sh);if(x)x.disabled=true;});["#e_del"].forEach(s=>{const x=$(s,sh);if(x)x.remove();});const r=$("#e_ret",sh);if(r)r.closest("label").remove();
+   sh.querySelector(".photo-pick").insertAdjacentHTML("afterend",'<div class="banner i sm">Los datos personales vienen de la lista oficial de coordinación. Puedes cambiar la foto, las observaciones y la autorización.</div>');}
   const leer=()=>{const o={...e,apellidos:$("#e_ap").value.trim(),nombres:$("#e_no").value.trim(),tipoDoc:$("#e_td").value,documento:$("#e_doc").value.trim(),cursoId:$("#e_cur").value,nacimiento:$("#e_fn").value,acudiente:$("#e_acu").value.trim(),telefono:$("#e_tel").value.trim(),correo:$("#e_mail").value.trim(),obs:$("#e_obs").value.trim(),autorizacion:$("#e_aut").checked,foto};
    if($("#e_ret"))o.activo=!$("#e_ret").checked;if(!o.creado)o.creado=Date.now();return o;};
   const guardar=async otro=>{const o=leer();if(!o.apellidos&&!o.nombres){toast("Escribe al menos nombres o apellidos.",true);return;}
@@ -684,8 +686,8 @@ function vAjustes(){
  const c=cfg(),E=c.escala;const sumP=c.periodos.reduce((s,p)=>s+(+p.peso||0),0);
  return `<h2>Ajustes</h2>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Docente e institución</h3><button class="btn sm" data-go="datos">Editar</button></div><dl class="kv" style="margin-top:8px"><dt>Docente</dt><dd>${esc(c.docente||"—")}</dd><dt>Institución</dt><dd>${esc(c.institucion||"—")}</dd><dt>Año lectivo</dt><dd>${esc(c.anio)}</dd><dt>Alerta de fallas</dt><dd>${esc(c.alertaFallas)} o más por periodo</dd></dl></div>
- <div class="card"><div class="row"><h3 class="sp" style="margin:0">Cursos</h3><button class="btn sm pri" data-go="curso">+ Curso</button></div><div class="list">${cursosArr().map(x=>`<div class="it"><div class="nm"><b>${esc(x.nombre)}</b><span class="mut sm">${esc([x.grado?"Grado "+x.grado:"",x.jornada,x.director?"Director: "+x.director:""].filter(Boolean).join(" · "))} · ${estsCurso(x.id).length} estudiantes</span></div><button class="btn sm" data-curso="${x.id}">Editar</button></div>`).join("")||'<div class="mut sm">Sin cursos.</div>'}</div></div>
- <div class="card"><div class="row"><h3 class="sp" style="margin:0">Asignaturas y forma de calificar</h3><button class="btn sm pri" data-go="asig">+ Asignatura</button></div><div class="list">${Object.values(S.asigs).sort(byName).map(a=>`<div class="it"><div class="nm"><b>${esc(a.nombre)}</b><span class="mut sm">${esc((a.cursoIds||[]).map(i=>(S.cursos[i]||{}).nombre).filter(Boolean).join(", ")||"Sin cursos")} · ${esc(comps(a).map(k=>k.nombre+" "+k.peso+"%").join(", "))}</span></div><button class="btn sm" data-asig="${a.id}">Editar</button></div>`).join("")||'<div class="mut sm">Sin asignaturas.</div>'}</div></div>
+ ${modoOficial()?cardCarga():""}<div class="card" style="${modoOficial()?"display:none":""}"><div class="row"><h3 class="sp" style="margin:0">Cursos</h3><button class="btn sm pri" data-go="curso">+ Curso</button></div><div class="list">${cursosArr().map(x=>`<div class="it"><div class="nm"><b>${esc(x.nombre)}</b><span class="mut sm">${esc([x.grado?"Grado "+x.grado:"",x.jornada,x.director?"Director: "+x.director:""].filter(Boolean).join(" · "))} · ${estsCurso(x.id).length} estudiantes</span></div><button class="btn sm" data-curso="${x.id}">Editar</button></div>`).join("")||'<div class="mut sm">Sin cursos.</div>'}</div></div>
+ <div class="card" style="${modoOficial()?"display:none":""}"><div class="row"><h3 class="sp" style="margin:0">Asignaturas y forma de calificar</h3><button class="btn sm pri" data-go="asig">+ Asignatura</button></div><div class="list">${Object.values(S.asigs).sort(byName).map(a=>`<div class="it"><div class="nm"><b>${esc(a.nombre)}</b><span class="mut sm">${esc((a.cursoIds||[]).map(i=>(S.cursos[i]||{}).nombre).filter(Boolean).join(", ")||"Sin cursos")} · ${esc(comps(a).map(k=>k.nombre+" "+k.peso+"%").join(", "))}</span></div><button class="btn sm" data-asig="${a.id}">Editar</button></div>`).join("")||'<div class="mut sm">Sin asignaturas.</div>'}</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Horario de clases</h3><button class="btn sm" data-go="horario">Editar</button></div><div class="sm mut" style="margin-top:6px">${horario().length?[1,2,3,4,5,6].map(d=>{const n=horario().filter(s=>+s.dia===d).length;return n?`${DIA3[d]}: ${n}`:"";}).filter(Boolean).join(" · ")+` · ${horario().length} clases por semana`:"Sin horario registrado."}</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Estructura de la nota</h3><button class="btn sm" data-go="plantilla">Editar</button></div><div class="row" style="margin-top:6px">${(cfg().plantilla||_def.plantilla).map(k=>`<span class="tag">${esc(k.nombre)} ${esc(k.peso)}%</span>`).join("")}</div><div class="sm mut" style="margin-top:6px">Se usa al crear asignaturas; cada asignatura puede ajustarse aparte.</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Periodos académicos</h3><button class="btn sm" data-go="periodos">Editar</button></div>${sumP!==100?`<div class="banner" style="margin:8px 0 0">Los pesos suman ${sumP}%. El acumulado se normaliza, pero conviene que sumen 100%.</div>`:""}<div class="list">${c.periodos.map(p=>`<div class="it"><div class="nm"><b>${esc(p.nombre)}</b><span class="mut sm">${p.inicio?fFecha(p.inicio)+" a "+fFecha(p.fin):"Sin fechas"}</span></div><span class="tag">${esc(p.peso)}%</span></div>`).join("")}</div></div>
@@ -722,6 +724,7 @@ function formAsig(a){const nuevo=!a;a=a||{id:nid(),cursoIds:ctx.c?[ctx.c]:[],com
  <div class="f">Cursos donde se dicta</div><div class="row" style="margin-bottom:10px">${cursosArr().map(c=>`<label class="chk" style="margin:0 10px 4px 0"><input type="checkbox" class="s_c" value="${c.id}" ${(a.cursoIds||[]).includes(c.id)?"checked":""}><span>${esc(c.nombre)}</span></label>`).join("")||'<span class="mut sm">Primero crea un curso.</span>'}</div>
  <div class="f">Componentes de la calificación (personalizables)</div>${re.html}<div class="sm mut" id="s_sum" style="margin-top:6px"></div>
  <div class="ft">${nuevo?"":`<button class="btn dan" id="s_del">Eliminar</button><span class="sp"></span>`}<button class="btn pri" id="s_ok">Guardar</button></div>`,sh=>{re.mount(sh);
+  if(a.oficial&&modoOficial()){$("#s_n",sh).disabled=true;$$(".s_c",sh).forEach(x=>x.disabled=true);const d=$("#s_del",sh);if(d)d.remove();}
   const sum=()=>{if(!$("#s_sum"))return;const t=re.read().reduce((s,r)=>s+(+r.peso||0),0);$("#s_sum").textContent=`Suma de pesos: ${t}%`+(t!==100?" (se recomienda 100%)":"");};sh.addEventListener("input",sum);sh.addEventListener("click",()=>setTimeout(sum));sum();
   $("#s_ok",sh).onclick=async()=>{const k=re.read().filter(r=>r.nombre);if(!k.length)return toast("Agrega al menos un componente.",true);
    const o={...a,nombre:$("#s_n").value.trim(),horas:$("#s_h").value,cursoIds:$$(".s_c:checked").map(i=>i.value),componentes:k.map(r=>({id:r.id,nombre:r.nombre,peso:+r.peso||0}))};if(!o.nombre)return toast("Escribe el nombre de la asignatura.",true);
@@ -799,8 +802,9 @@ $("#main").addEventListener("click",async e=>{
  if(d.evp){UI.evPer=d.evp;renderMain();return;}
  switch(d.go){
   case"datos":return formDatos();case"curso":return formCurso();case"asig":return formAsig();
-  case"est":if(!cursosArr().length)return toast("Primero crea un curso.",true);return formEst(null);
+  case"est":if(modoOficial())return toast("Las listas las administra coordinación.",true);if(!cursosArr().length)return toast("Primero crea un curso.",true);return formEst(null);
   case"imp":return importar();
+  case"carga":return formCarga();
   case"syncFull":toast("Recargando…");return loadAll(true);
   case"unirInst":return unirInst();
   case"crearInst":return crearInst();
@@ -827,13 +831,15 @@ $("#main").addEventListener("click",async e=>{
   case"resetDrive":{if(await ask("La app dejará de usar las carpetas actuales y creará unas nuevas con la próxima evidencia. Tus archivos en Drive no se borran. ¿Continuar?","Continuar"))saveCfg({drive:{rootId:"",carpetas:{}}});return;}
  }
 });
-$("#main").addEventListener("input",e=>{if(e.target.id==="q"){UI.q=e.target.value;renderEstList();}});
+$("#main").addEventListener("input",e=>{if(e.target.id==="l_q"){CO.lq=e.target.value;clearTimeout(CO._t);CO._t=setTimeout(()=>{const pos=e.target.selectionStart;renderMain();const n=$("#l_q");if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(x){}}},300);}if(e.target.id==="q"){UI.q=e.target.value;renderEstList();}});
 $("#main").addEventListener("change",e=>{
  const t=e.target;
  if(t.id==="co_f"){CO.f=t.value||hoy();t.blur();return renderMain();}
  if(t.id==="co_cur"){CO.curso=t.value;return renderMain();}
  if(t.id==="co_d"||t.id==="co_h"){CO[t.id==="co_d"?"desde":"hasta"]=t.value;t.blur();return renderMain();}
  if(t.id==="co_est"){CO.estado=t.value;return renderMain();}
+ if(t.id==="l_cur"){CO.lcur=t.value;return renderMain();}
+ if(t.id==="l_ret"){CO.lret=t.checked;return renderMain();}
  if(t.id==="fCur"){UI.cursoFiltro=t.value;renderEstList();return;}
  if(t.id==="restore"){const f=t.files[0];t.value="";if(f)restaurar(f);return;}
  if(t.id==="showComp"){UI.showComp=t.checked;renderMain();return;}
@@ -1166,7 +1172,7 @@ const INST={m:null,inst:null,exc:[],meta:null,cargado:false};
 const esCoord=()=>!!(INST.m&&INST.m.rol==="coordinador");
 async function loadInst(){
  try{const {data:m,error}=await sb.from("miembros").select("*").eq("user_id",uid);if(error)throw error;INST.m=(m||[])[0]||null;
-  if(INST.m){const {data:i}=await sb.from("instituciones").select("*").eq("id",INST.m.inst_id);INST.inst=(i||[])[0]||null;const {data:e}=await sb.rpc("excusas_aprobadas");INST.exc=e||[];await syncMeta();}
+  if(INST.m){const {data:i}=await sb.from("instituciones").select("*").eq("id",INST.m.inst_id);INST.inst=(i||[])[0]||null;const {data:e}=await sb.rpc("excusas_aprobadas");INST.exc=e||[];await syncMeta();await loadOficial();await syncOficial();}
   else{INST.inst=null;INST.exc=[];}}catch(e){INST.m=null;}
  INST.cargado=true;
  if(esCoord()&&!location.hash&&!cursosArr().length){location.hash="coord";return;}
@@ -1174,7 +1180,7 @@ async function loadInst(){
 async function syncMeta(){if(!INST.m)return;const meta={docente:cfg().docente||"",codigos:cfg().codigos,marcas:marcasCfg()};
  if(JSON.stringify(meta)===JSON.stringify(INST.meta))return;try{await dbSet("meta","asistencia",meta);INST.meta=meta;}catch(e){}}
 function excusado(cid,eid,f){if(!INST.exc.length)return false;const c=S.cursos[cid],e=S.ests[eid];if(!c||!e)return false;const cn=norm(c.nombre),k=norm((e.apellidos||"")+" "+(e.nombres||"")),d=digits(e.documento);
- return INST.exc.some(x=>x.curso===cn&&f>=String(x.desde)&&f<=String(x.hasta)&&(x.est_key===k||(d&&x.est_doc===d)));}
+ return INST.exc.some(x=>f>=String(x.desde)&&f<=String(x.hasta)&&((x.est_id&&x.est_id===eid)||(x.curso===cn&&(x.est_key===k||(d&&x.est_doc===d)))));}
 function tipoReg(d,eid){const c=(d.reg||{})[eid];if(!c)return"";const t=codTipo(c);return t==="falta"&&excusado(d.cursoId,eid,d.fecha)?"justificada":t;}
 function cardInstitucion(){
  if(!INST.cargado)return "";
@@ -1224,8 +1230,11 @@ async function loadCoord(desde,hasta,forzar){
  CO.loaded=true;CO.loading=false;if(UI.view==="coord")sched();}
 function modeloCoord(base){
  const T={};for(const r of base){const t=T[r.user_id]||(T[r.user_id]={cursos:{},asigs:{},ests:{},meta:null});if(r.col==="meta")t.meta=r.data;else if(t[r.col])t[r.col][r.id]=r.data;}
- const cursos={},ref={};
- for(const [u,t] of Object.entries(T))for(const [eid,e] of Object.entries(t.ests)){if(e.activo===false)continue;const c=t.cursos[e.cursoId];if(!c)continue;const cn=norm(c.nombre);
+ const cursos={},ref={},porId={};
+ for(const c of OF.cursos){const cn=norm(c.nombre);cursos[cn]={n:cn,nombre:c.nombre,est:[],byK:{},byD:{}};}
+ for(const o of OF.ests){if(!o.activo)continue;const c=OF.cursos.find(x=>x.id===o.curso_id);if(!c)continue;const cu=cursos[norm(c.nombre)];const k=norm(o.apellidos+" "+o.nombres),d=digits(o.documento);
+  const cl={id:o.id,k,d,curso:cu.n,cursoNombre:c.nombre,nombre:`${o.apellidos} ${o.nombres}`.trim(),acudiente:o.acudiente,telefono:o.telefono,foto:"",refs:[]};cu.est.push(cl);cu.byK[k]=cl;if(d)cu.byD[d]=cl;porId[o.id]=cl;}
+ for(const [u,t] of Object.entries(T))for(const [eid,e] of Object.entries(t.ests)){if(porId[eid]){porId[eid].refs.push(u+"|"+eid);ref[u+"|"+eid]=porId[eid];continue;}if(e.activo===false)continue;const c=t.cursos[e.cursoId];if(!c)continue;const cn=norm(c.nombre);
   const cu=cursos[cn]||(cursos[cn]={n:cn,nombre:c.nombre,est:[],byK:{},byD:{}});const k=norm((e.apellidos||"")+" "+(e.nombres||"")),d=digits(e.documento);
   let cl=(d&&cu.byD[d])||cu.byK[k];if(!cl){cl={k,d,curso:cn,cursoNombre:c.nombre,nombre:nomEst(e),acudiente:"",telefono:"",foto:"",refs:[]};cu.est.push(cl);}
   cu.byK[k]=cl;if(d){cu.byD[d]=cl;if(!cl.d)cl.d=d;}if(!cl.acudiente&&e.acudiente)cl.acudiente=e.acudiente;if(!cl.telefono&&e.telefono)cl.telefono=e.telefono;if(!cl.foto&&e.foto)cl.foto=e.foto;
@@ -1234,7 +1243,7 @@ function modeloCoord(base){
  CO.T=T;CO.cursos=cursos;CO.ref=ref;}
 const cursosCo=()=>Object.values(CO.cursos).sort((a,b)=>a.nombre.localeCompare(b.nombre,"es",{numeric:true}));
 const nomDoc=u=>(CO.miembros.find(m=>m.user_id===u)||{}).nombre||((CO.T[u]||{}).meta||{}).docente||"Docente";
-function excCo(cl,f){return CO.exc.some(x=>x.estado==="aprobada"&&x.curso===cl.curso&&f>=String(x.desde)&&f<=String(x.hasta)&&(x.est_key===cl.k||(cl.d&&x.est_doc===cl.d)));}
+function excCo(cl,f){return CO.exc.some(x=>x.estado==="aprobada"&&f>=String(x.desde)&&f<=String(x.hasta)&&((x.est_id&&cl.id&&x.est_id===cl.id)||(x.curso===cl.curso&&(x.est_key===cl.k||(cl.d&&x.est_doc===cl.d)))));}
 function eventosCo(desde,hasta){const ev=[];
  for(const r of CO.asis){const d=r.data||{};if(!d.fecha||d.fecha<desde||d.fecha>hasta)continue;const t=CO.T[r.user_id];if(!t)continue;
   const cods=(t.meta&&t.meta.codigos)||_def.codigos,mks=(t.meta&&Array.isArray(t.meta.marcas)?t.meta.marcas:_def.marcas),asig=(t.asigs[d.asigId]||{}).nombre||"";
@@ -1250,7 +1259,7 @@ function inicioTrim(){const p=periodoDeFecha(hoy());return p&&p.inicio?p.inicio:
 function vCoord(){
  if(!INST.cargado)return `<div class="load">Cargando…</div>`;
  if(!esCoord())return `<h2>Coordinación</h2><div class="card empty">Este módulo es solo para coordinación. ${INST.m?"":"Si eres coordinador(a), crea la institución o únete con el código de coordinación en Ajustes."}<div style="margin-top:10px"><a class="btn pri" href="#ajustes">Ir a Ajustes</a></div></div>`;
- const tabs=[["hoy","Hoy"],["cons","Consolidado"],["alertas","Alertas"],["excusas","Excusas"],["inst","Institución"]];
+ const tabs=[["hoy","Hoy"],["cons","Consolidado"],["alertas","Alertas"],["excusas","Excusas"],["listas","Listas oficiales"],["inst","Institución"]];
  let rng;if(CO.tab==="hoy")rng=[CO.f,CO.f];else if(CO.tab==="cons"){if(!CO.desde)CO.desde=inicioTrim();rng=[CO.desde,CO.hasta];}else if(CO.tab==="alertas")rng=[inicioTrim(),hoy()];else rng=[hoy(),hoy()];
  loadCoord(rng[0],rng[1]);
  let h=`<div class="row" style="margin-bottom:8px"><h2 style="margin:0" class="sp">Coordinación</h2><span class="mut sm">${esc((INST.inst||{}).nombre||"")}</span></div>
@@ -1258,8 +1267,8 @@ function vCoord(){
  if(CO.err)h+=`<div class="banner e">${esc(CO.err)}</div>`;
  if(!CO.loaded)return h+`<div class="load" style="min-height:30vh">Cargando información de la institución…</div>`;
  const nd=new Set(CO.miembros.filter(m=>m.rol==="docente"||CO.T[m.user_id]).map(m=>m.user_id)).size;
- if(!nd&&CO.tab!=="inst")h+=`<div class="banner i">Aún no hay docentes unidos. Compárteles el código de docentes que está en la pestaña Institución.</div>`;
- h+=({hoy:coHoy,cons:coCons,alertas:coAlertas,excusas:coExcusas,inst:coInst}[CO.tab]||coHoy)();
+ if(!nd&&CO.tab!=="inst"&&CO.tab!=="listas")h+=`<div class="banner i">Aún no hay docentes unidos. Compárteles el código de docentes que está en la pestaña Institución.</div>`;
+ h+=({hoy:coHoy,cons:coCons,alertas:coAlertas,excusas:coExcusas,listas:coListas,inst:coInst}[CO.tab]||coHoy)();
  return h;}
 function filtroCurso(){return `<select id="co_cur" style="flex:1 1 160px"><option value="">Todos los cursos</option>${cursosCo().map(c=>`<option value="${esc(c.n)}" ${c.n===CO.curso?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select>`;}
 function coHoy(){
@@ -1317,7 +1326,7 @@ function pickerHTML(p,key){const [cn,k]=String(key||"").split("|");const cs=curs
  return `<div class="f2"><label class="f">Curso<select id="${p}_cur">${cs.map(c=>`<option value="${esc(c.n)}" ${c.n===cur?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select></label><label class="f">Estudiante<select id="${p}_alu">${optsEst(cur,k)}</select></label></div>`;}
 function optsEst(cn,k){const cu=CO.cursos[cn];return cu?cu.est.map(c=>`<option value="${esc(c.k)}" ${c.k===k?"selected":""}>${esc(c.nombre)}</option>`).join(""):"";}
 function montarPicker(sh,p){const c=$("#"+p+"_cur",sh);if(c)c.onchange=()=>{$("#"+p+"_alu",sh).innerHTML=optsEst(c.value,"");};}
-function leerPicker(p){const cn=$("#"+p+"_cur").value,k=$("#"+p+"_alu").value;const cl=clDe(cn+"|"+k);return cl?{curso:cn,curso_nombre:cl.cursoNombre,est_key:cl.k,est_doc:cl.d||"",est_nombre:cl.nombre}:null;}
+function leerPicker(p){const cn=$("#"+p+"_cur").value,k=$("#"+p+"_alu").value;const cl=clDe(cn+"|"+k);return cl?{curso:cn,curso_nombre:cl.cursoNombre,est_key:cl.k,est_doc:cl.d||"",est_id:cl.id||"",est_nombre:cl.nombre}:null;}
 function formExcusa(x,key){if(!cursosCo().length)return toast("Aún no hay cursos de docentes unidos.",true);const nuevo=!x;x=x||{desde:CO.tab==="hoy"?CO.f:hoy(),hasta:CO.tab==="hoy"?CO.f:hoy(),estado:"aprobada",motivo:"",soporte:""};
  openModal(`<div class="hd"><h3>${nuevo?"Registrar excusa":"Editar excusa"}</h3><button class="x" data-close>×</button></div>${pickerHTML("ex",x.curso?x.curso+"|"+x.est_key:key)}
  <div class="f2"><label class="f">Desde<input type="date" id="ex_d" value="${esc(x.desde)}"></label><label class="f">Hasta<input type="date" id="ex_h" value="${esc(x.hasta)}"></label></div>
@@ -1342,6 +1351,10 @@ async function accionCo(op,el){
  const r=CO.rango||[hoy(),hoy()];
  switch(op){
   case"refrescar":return loadCoord(r[0],r[1],true);
+  case"lImport":return importarOf();
+  case"lCur":return formCursoOf(OF.cursos.find(x=>x.id===el.dataset.id));
+  case"lAsi":return formAsigOf(OF.asigs.find(x=>x.id===el.dataset.id));
+  case"lEst":return formEstOf(OF.ests.find(x=>x.id===el.dataset.id));
   case"rmes":CO.desde=hoy().slice(0,8)+"01";CO.hasta=hoy();return renderMain();
   case"rano":CO.desde=hoy().slice(0,4)+"-01-01";CO.hasta=hoy();return renderMain();
   case"rper":CO.desde=el.dataset.a;CO.hasta=el.dataset.b;return renderMain();
@@ -1359,6 +1372,116 @@ async function accionCo(op,el){
   case"quitarM":{const m=CO.miembros.find(x=>x.user_id===el.dataset.id);if(!await ask(`¿Quitar a ${m.nombre||m.email} de la institución? Coordinación dejará de ver su asistencia.`,"Quitar",true))return;const {error}=await sb.from("miembros").delete().eq("inst_id",INST.m.inst_id).eq("user_id",m.user_id);if(error)return toast(avErr(error),true);return loadCoord(r[0],r[1],true);}
  }}
 setInterval(()=>{if(UI.view==="coord"&&CO.tab==="hoy"&&CO.f===hoy()&&document.visibilityState==="visible"&&!editing()&&$("#modal").classList.contains("hidden"))loadCoord(CO.f,CO.f,true);},60000);
+/* ---------- LISTAS OFICIALES Y CARGA ACADÉMICA ---------- */
+const OF={cursos:[],asigs:[],ests:[],at:0,cargando:false};
+const modoOficial=()=>!!(INST.m&&OF.cursos.length);
+const gradoDe=n=>{const s=String(n||"").trim();let m=s.match(/^(\d{1,2})(\d{2})$/);if(m)return String(+m[1]);m=s.match(/^(\d{1,2})/);return m?String(+m[1]):"";};
+const ordCur=(a,b)=>String(a.nombre).localeCompare(String(b.nombre),"es",{numeric:true});
+async function loadOficial(forzar){if(!INST.m||OF.cargando)return;if(!forzar&&Date.now()-OF.at<600000)return;OF.cargando=true;
+ try{const i=INST.m.inst_id;const [c,a,e]=await Promise.all([pag(()=>sb.from("inst_cursos").select("*").eq("inst_id",i).order("id")),pag(()=>sb.from("inst_asignaturas").select("*").eq("inst_id",i).order("id")),pag(()=>sb.from("inst_estudiantes").select("*").eq("inst_id",i).order("id"))]);
+  OF.cursos=c.sort(ordCur);OF.asigs=a.sort(byName);OF.ests=e;OF.at=Date.now();}catch(e){}
+ OF.cargando=false;}
+async function putMany(col,objs){if(!objs.length)return;for(const o of objs)S[col][o.id]=o;sched();
+ for(let i=0;i<objs.length;i+=200){const rows=objs.slice(i,i+200).map(o=>({user_id:uid,col,id:o.id,data:strip(o),updated_at:new Date().toISOString()}));const {error}=await sb.from("docs").upsert(rows,{onConflict:"user_id,col,id"});if(error)throw error;}guardarCache();}
+const igual=(a,b)=>String(a??"")===String(b??"");
+async function syncOficial(){if(!modoOficial())return;
+ const offC=Object.fromEntries(OF.cursos.map(c=>[c.id,c])),offA=Object.fromEntries(OF.asigs.map(a=>[a.id,a])),offE=Object.fromEntries(OF.ests.map(e=>[e.id,e]));
+ const cur=[],asg=[],est=[];
+ for(const c of Object.values(S.cursos)){const o=offC[c.id];if(o&&!(igual(c.nombre,o.nombre)&&igual(c.grado,o.grado)&&igual(c.jornada,o.jornada)&&igual(c.director,o.director)))cur.push({...c,nombre:o.nombre,grado:o.grado,jornada:o.jornada,director:o.director,oficial:true});}
+ for(const a of Object.values(S.asigs)){const o=offA[a.id];if(o&&!igual(a.nombre,o.nombre))asg.push({...a,nombre:o.nombre,oficial:true});}
+ const mis=new Set(Object.values(S.asigs).flatMap(a=>(offA[a.id]?a.cursoIds:[])||[]).filter(id=>offC[id]));
+ for(const o of OF.ests){const l=S.ests[o.id];const act=!!o.activo&&mis.has(o.curso_id);
+  const b={apellidos:o.apellidos,nombres:o.nombres,tipoDoc:o.tipo_doc,documento:o.documento,acudiente:o.acudiente,telefono:o.telefono,correo:o.correo,cursoId:o.curso_id};
+  if(!l){if(act)est.push({id:o.id,...b,activo:true,oficial:true,creado:Date.now()});continue;}
+  if(Object.keys(b).some(k=>!igual(l[k],b[k]))||(l.activo!==false)!==act||!l.oficial)est.push({...l,...b,activo:act,oficial:true});}
+ for(const l of Object.values(S.ests))if(l.oficial&&!offE[l.id]&&l.activo!==false)est.push({...l,activo:false});
+ try{await putMany("cursos",cur);await putMany("asigs",asg);await putMany("ests",est);}catch(e){toast(dbMsg(e),true);}}
+function formCarga(){
+ if(!OF.cursos.length)return toast("Coordinación aún no ha subido los cursos oficiales.",true);
+ if(!OF.asigs.length)return toast("Coordinación aún no ha registrado el catálogo de asignaturas.",true);
+ const sel={};for(const a of OF.asigs){const l=S.asigs[a.id];sel[a.id]=new Set(l?(l.cursoIds||[]).filter(id=>OF.cursos.some(c=>c.id===id)):[]);}
+ const grados=[...new Set(OF.cursos.map(c=>c.grado||gradoDe(c.nombre)))].sort((a,b)=>String(a).localeCompare(String(b),"es",{numeric:true}));
+ const abiertas=new Set(Object.keys(sel).filter(k=>sel[k].size));
+ const cuerpo=()=>OF.asigs.map(a=>{const on=abiertas.has(a.id);return `<div class="slot"><label class="chk" style="margin:0"><input type="checkbox" data-ca="${esc(a.id)}" ${on?"checked":""}><span><b>${esc(a.nombre)}</b>${a.area?` <span class="mut sm">${esc(a.area)}</span>`:""}${sel[a.id].size?` <span class="tag ok">${sel[a.id].size} curso(s)</span>`:""}</span></label>
+  ${on?grados.map(g=>{const cs=OF.cursos.filter(c=>(c.grado||gradoDe(c.nombre))===g);return `<div class="row" style="gap:4px;margin-top:8px;align-items:center"><span class="mut sm" style="width:64px">${g?"Grado "+esc(g):"Otros"}</span>${cs.map(c=>`<button class="mb ${sel[a.id].has(c.id)?"on":""}" data-ta="${esc(a.id)}" data-tc="${esc(c.id)}">${esc(c.nombre)}</button>`).join("")}<button class="lnk sm" data-tg="${esc(a.id)}" data-g="${esc(g)}">todo el grado</button></div>`;}).join(""):""}</div>`;}).join("");
+ openModal(`<div class="hd"><h3>Mi carga académica</h3><button class="x" data-close>×</button></div><p class="sm mut">Marca las asignaturas que dictas y, en cada una, los cursos. Los estudiantes aparecen automáticamente desde las listas oficiales de coordinación.</p><div id="cg">${cuerpo()}</div><div class="ft"><button class="btn pri" id="cg_ok">Guardar carga</button></div>`,sh=>{
+  const pinta=()=>{$("#cg").innerHTML=cuerpo();};
+  sh.addEventListener("change",e=>{const a=e.target.dataset.ca;if(!a)return;if(e.target.checked)abiertas.add(a);else{abiertas.delete(a);sel[a].clear();}pinta();});
+  sh.addEventListener("click",e=>{const d=e.target.dataset;if(d.ta){const s=sel[d.ta];s.has(d.tc)?s.delete(d.tc):s.add(d.tc);pinta();}else if(d.tg){const cs=OF.cursos.filter(c=>(c.grado||gradoDe(c.nombre))===d.g);const s=sel[d.tg];const todos=cs.every(c=>s.has(c.id));cs.forEach(c=>todos?s.delete(c.id):s.add(c.id));pinta();}});
+  $("#cg_ok",sh).onclick=async ev=>{ev.target.disabled=true;const asg=[],nec=new Set();
+   for(const a of OF.asigs){const ids=[...sel[a.id]];const l=S.asigs[a.id];
+    if(ids.length){ids.forEach(i=>nec.add(i));asg.push(l?{...l,nombre:a.nombre,cursoIds:ids,oficial:true}:{id:a.id,nombre:a.nombre,horas:"",cursoIds:ids,componentes:(cfg().plantilla||_def.plantilla).map(c=>({...c})),oficial:true,creado:Date.now()});}
+    else if(l&&(l.cursoIds||[]).length)asg.push({...l,cursoIds:[]});}
+   const cur=[...nec].filter(i=>!S.cursos[i]).map(i=>{const c=OF.cursos.find(x=>x.id===i);return{id:i,nombre:c.nombre,grado:c.grado||gradoDe(c.nombre),jornada:c.jornada,director:c.director,oficial:true};});
+   try{await putMany("cursos",cur);await putMany("asigs",asg);await syncOficial();closeModal();fixCtx();toast("Carga académica guardada");render();}catch(e){ev.target.disabled=false;toast(dbMsg(e),true);}};
+ });}
+function cardCarga(){const mis=Object.values(S.asigs).filter(a=>(a.cursoIds||[]).length).sort(byName);
+ return `<div class="card"><div class="row"><h3 class="sp" style="margin:0">Mi carga académica</h3><button class="btn sm pri" data-go="carga">Configurar</button></div>
+ <div class="sm mut" style="margin-top:4px">Cursos, estudiantes y asignaturas vienen de las listas oficiales de ${esc((INST.inst||{}).nombre||"la institución")}.</div>
+ <div class="list">${mis.length?mis.map(a=>`<div class="it"><div class="nm"><b>${esc(a.nombre)}</b><span class="mut sm">${esc((a.cursoIds||[]).map(i=>(S.cursos[i]||{}).nombre).filter(Boolean).join(", "))} · ${esc(comps(a).map(k=>k.nombre+" "+k.peso+"%").join(", "))}</span></div><button class="btn sm" data-asig="${a.id}">Calificación</button></div>`).join(""):'<div class="mut sm">Aún no has configurado tu carga.</div>'}</div></div>`;}
+
+/* ---------- LISTAS OFICIALES (coordinación) ---------- */
+function coListas(){
+ if(!OF.at&&!OF.cargando){loadOficial(true).then(()=>sched());}
+ const q=norm(CO.lq||"");const cnt=id=>OF.ests.filter(e=>e.curso_id===id&&e.activo).length;
+ const cf=CO.lcur||"";let es=OF.ests.filter(e=>(!cf||e.curso_id===cf)&&(CO.lret?!e.activo:e.activo)&&(!q||norm(e.apellidos+" "+e.nombres+" "+e.documento).includes(q))).sort((a,b)=>(a.apellidos+a.nombres).localeCompare(b.apellidos+b.nombres,"es"));
+ const nombreC=id=>(OF.cursos.find(c=>c.id===id)||{}).nombre||"";
+ return `<div class="stats"><div class="stat"><div class="v">${OF.cursos.length}</div><div class="l">Cursos</div></div><div class="stat"><div class="v">${OF.ests.filter(e=>e.activo).length}</div><div class="l">Estudiantes activos</div></div><div class="stat"><div class="v">${OF.asigs.length}</div><div class="l">Asignaturas</div></div></div>
+ <div class="row" style="margin-bottom:12px"><button class="btn pri" data-co="lImport">Importar estudiantes</button><button class="btn" data-co="lCur">+ Curso</button><button class="btn" data-co="lAsi">+ Asignatura</button><button class="btn" data-co="lEst">+ Estudiante</button></div>
+ <div class="card"><h3>Cursos</h3>${OF.cursos.length?`<div class="row" style="gap:6px">${OF.cursos.map(c=>`<button class="mb" style="padding:5px 10px;font-size:13px" data-co="lCur" data-id="${esc(c.id)}">${esc(c.nombre)} · ${cnt(c.id)}</button>`).join("")}</div>`:'<div class="mut sm">Aún no hay cursos. Créalos o impórtalos junto con los estudiantes.</div>'}</div>
+ <div class="card"><h3>Asignaturas</h3>${OF.asigs.length?`<div class="row" style="gap:6px">${OF.asigs.map(a=>`<button class="mb" style="padding:5px 10px;font-size:13px" data-co="lAsi" data-id="${esc(a.id)}">${esc(a.nombre)}</button>`).join("")}</div>`:'<div class="mut sm">Registra las asignaturas que ofrece el colegio para que cada docente arme su carga.</div>'}</div>
+ <div class="card"><h3>Estudiantes</h3><div class="row" style="margin-bottom:8px"><select id="l_cur" style="flex:1 1 140px"><option value="">Todos los cursos</option>${OF.cursos.map(c=>`<option value="${esc(c.id)}" ${c.id===cf?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select><input type="search" id="l_q" placeholder="Buscar" value="${esc(CO.lq||"")}" style="flex:1 1 140px"><label class="chk" style="margin:0"><input type="checkbox" id="l_ret" ${CO.lret?"checked":""}><span class="sm">Retirados</span></label></div>
+ <div class="mut sm" style="margin-bottom:6px">${es.length} estudiante(s)</div><div class="list">${es.slice(0,300).map(e=>`<div class="it"><div class="nm"><b>${esc(e.apellidos)} ${esc(e.nombres)}</b><span class="mut sm">${esc(nombreC(e.curso_id))}${e.documento?" · "+esc(e.tipo_doc)+" "+esc(e.documento):""}${e.acudiente?" · "+esc(e.acudiente):""}</span></div><button class="btn sm" data-co="lEst" data-id="${esc(e.id)}">Editar</button></div>`).join("")}${es.length>300?'<div class="mut sm">Mostrando 300; usa el buscador o el filtro de curso.</div>':""}</div></div>
+ <div class="mut sm">Los cambios llegan a los docentes la próxima vez que abran la aplicación. Retirar a un estudiante lo oculta de las listas sin borrar su historial.</div>`;}
+async function guardarOf(tabla,row){const {error}=await sb.from(tabla).upsert(row);if(error){toast(/duplicate|unique/i.test(error.message)?"Ya existe un registro con ese nombre.":avErr(error),true);return false;}await loadOficial(true);CO.baseAt=0;sched();return true;}
+function formCursoOf(c){const nuevo=!c;c=c||{id:nid(),nombre:"",grado:"",jornada:"",director:""};
+ openModal(`<div class="hd"><h3>${nuevo?"Nuevo curso":"Editar curso"}</h3><button class="x" data-close>×</button></div><div class="f2"><label class="f">Nombre<input type="text" id="lc_n" value="${esc(c.nombre)}" placeholder="1002"></label><label class="f">Grado<input type="text" id="lc_g" value="${esc(c.grado)}" placeholder="10"></label><label class="f">Jornada<input type="text" id="lc_j" value="${esc(c.jornada)}"></label><label class="f">Director de grupo<input type="text" id="lc_d" value="${esc(c.director)}"></label></div>
+ <div class="ft">${nuevo?"":`<button class="btn dan" id="lc_del">Eliminar</button><span class="sp"></span>`}<button class="btn pri" id="lc_ok">Guardar</button></div>`,sh=>{
+  $("#lc_n",sh).oninput=e=>{if(!$("#lc_g").value)$("#lc_g").placeholder=gradoDe(e.target.value)||"10";};
+  $("#lc_ok",sh).onclick=async()=>{const n=$("#lc_n").value.trim();if(!n)return toast("Escribe el nombre del curso.",true);if(await guardarOf("inst_cursos",{id:c.id,inst_id:INST.m.inst_id,nombre:n,grado:$("#lc_g").value.trim()||gradoDe(n),jornada:$("#lc_j").value.trim(),director:$("#lc_d").value.trim()})){closeModal();toast("Curso guardado");}};
+  if($("#lc_del",sh))$("#lc_del",sh).onclick=async()=>{if(OF.ests.some(e=>e.curso_id===c.id))return toast("El curso tiene estudiantes. Muévelos a otro curso o elimínalos primero.",true);if(!await ask(`¿Eliminar el curso ${c.nombre}?`,"Eliminar",true))return;const {error}=await sb.from("inst_cursos").delete().eq("id",c.id);if(error)return toast(avErr(error),true);await loadOficial(true);closeModal();sched();};});}
+function formAsigOf(a){const nuevo=!a;a=a||{id:nid(),nombre:"",area:""};
+ openModal(`<div class="hd"><h3>${nuevo?"Nueva asignatura":"Editar asignatura"}</h3><button class="x" data-close>×</button></div><label class="f">Nombre<input type="text" id="la_n" value="${esc(a.nombre)}" placeholder="Tecnología e informática"></label><label class="f">Área (opcional)<input type="text" id="la_a" value="${esc(a.area)}"></label>
+ <div class="ft">${nuevo?"":`<button class="btn dan" id="la_del">Eliminar</button><span class="sp"></span>`}<button class="btn pri" id="la_ok">Guardar</button></div>`,sh=>{
+  $("#la_ok",sh).onclick=async()=>{const n=$("#la_n").value.trim();if(!n)return toast("Escribe el nombre.",true);if(await guardarOf("inst_asignaturas",{id:a.id,inst_id:INST.m.inst_id,nombre:n,area:$("#la_a").value.trim()})){closeModal();toast("Asignatura guardada");}};
+  if($("#la_del",sh))$("#la_del",sh).onclick=async()=>{if(!await ask(`¿Eliminar ${a.nombre} del catálogo? Los docentes que ya la tienen en su carga conservan sus datos.`,"Eliminar",true))return;const {error}=await sb.from("inst_asignaturas").delete().eq("id",a.id);if(error)return toast(avErr(error),true);await loadOficial(true);closeModal();sched();};});}
+function formEstOf(e){if(!OF.cursos.length)return toast("Primero crea un curso.",true);const nuevo=!e;e=e||{id:nid(),curso_id:CO.lcur||OF.cursos[0].id,apellidos:"",nombres:"",tipo_doc:"TI",documento:"",acudiente:"",telefono:"",correo:"",activo:true};
+ openModal(`<div class="hd"><h3>${nuevo?"Nuevo estudiante":"Editar estudiante"}</h3><button class="x" data-close>×</button></div><div class="f2"><label class="f">Apellidos<input type="text" id="le_ap" value="${esc(e.apellidos)}"></label><label class="f">Nombres<input type="text" id="le_no" value="${esc(e.nombres)}"></label>
+ <label class="f">Curso<select id="le_cu">${OF.cursos.map(c=>`<option value="${esc(c.id)}" ${c.id===e.curso_id?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select></label><label class="f">Tipo de documento<select id="le_td">${["TI","RC","CC","CE","PPT","NUIP","Otro"].map(t=>`<option ${t===e.tipo_doc?"selected":""}>${t}</option>`).join("")}</select></label>
+ <label class="f">Documento<input type="text" id="le_doc" value="${esc(e.documento)}"></label><label class="f">Acudiente<input type="text" id="le_acu" value="${esc(e.acudiente)}"></label><label class="f">Teléfono<input type="tel" id="le_tel" value="${esc(e.telefono)}"></label><label class="f">Correo<input type="email" id="le_mail" value="${esc(e.correo)}"></label></div>
+ ${nuevo?"":`<label class="chk"><input type="checkbox" id="le_ret" ${e.activo?"":"checked"}><span>Retirado (se oculta de las listas de los docentes; se conserva el historial)</span></label>`}
+ <div class="ft">${nuevo?"":`<button class="btn dan" id="le_del">Eliminar</button><span class="sp"></span>`}<button class="btn pri" id="le_ok">Guardar</button></div>`,sh=>{
+  $("#le_ok",sh).onclick=async()=>{const r={id:e.id,inst_id:INST.m.inst_id,apellidos:$("#le_ap").value.trim(),nombres:$("#le_no").value.trim(),curso_id:$("#le_cu").value,tipo_doc:$("#le_td").value,documento:$("#le_doc").value.trim(),acudiente:$("#le_acu").value.trim(),telefono:$("#le_tel").value.trim(),correo:$("#le_mail").value.trim(),activo:$("#le_ret")?!$("#le_ret").checked:true};
+   if(!r.apellidos&&!r.nombres)return toast("Escribe el nombre.",true);if(await guardarOf("inst_estudiantes",r)){closeModal();toast("Estudiante guardado");}};
+  if($("#le_del",sh))$("#le_del",sh).onclick=async()=>{if(!await ask(`¿Eliminar a ${e.apellidos} ${e.nombres} de la lista oficial? Desaparecerá de las listas de todos los docentes. Si solo se retiró del colegio, márcalo como retirado.`,"Eliminar",true))return;const {error}=await sb.from("inst_estudiantes").delete().eq("id",e.id);if(error)return toast(avErr(error),true);await loadOficial(true);closeModal();sched();};});}
+function importarOf(){
+ openModal(`<div class="hd"><h3>Importar estudiantes</h3><button class="x" data-close>×</button></div>
+ <p class="sm mut">Copia desde Excel (o pega texto) con una fila por estudiante y estas columnas, en este orden: <b>Curso · Apellidos · Nombres · Documento · Acudiente · Teléfono</b>. Las tres primeras son obligatorias. Los cursos que no existan se crean. Si el estudiante ya está (mismo documento, o mismo nombre en el mismo curso), se actualizan sus datos.</p>
+ <label class="btn sm" style="margin-bottom:8px">Cargar archivo .csv o .txt<input type="file" accept=".csv,.txt,text/csv,text/plain" id="io_f" hidden></label>
+ <textarea id="io_t" style="min-height:200px" placeholder="1002&#9;Gómez Pérez&#9;Ana María&#9;1023456789&#9;María Pérez&#9;3001234567"></textarea><div id="io_p" class="sm" style="margin:8px 0"></div>
+ <div class="ft"><button class="btn pri" id="io_ok" disabled>Importar</button></div>`,sh=>{
+  let plan=null;
+  const parse=()=>{const lines=$("#io_t").value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);const out=[],err=[];
+   for(const [n,l] of lines.entries()){const sep=l.includes("\t")?"\t":l.includes(";")?";":",";const p=l.split(sep).map(x=>x.trim().replace(/^"|"$/g,""));
+    if(n===0&&/apellido/i.test(l))continue;if(p.length<3||!p[0]||(!p[1]&&!p[2])){err.push(n+1);continue;}
+    out.push({curso:p[0],apellidos:p[1]||"",nombres:p[2]||"",documento:(p[3]||"").replace(/[^\dA-Za-z-]/g,""),acudiente:p[4]||"",telefono:p[5]||""});}
+   const cursosN={};for(const c of OF.cursos)cursosN[norm(c.nombre)]=c;const nuevosC={};
+   for(const r of out){const k=norm(r.curso);if(!cursosN[k]&&!nuevosC[k])nuevosC[k]={id:nid(),inst_id:INST.m.inst_id,nombre:r.curso,grado:gradoDe(r.curso),jornada:"",director:""};}
+   const todosC={...cursosN,...nuevosC};let nuevos=0,act=0;const rows=[];
+   for(const r of out){const c=todosC[norm(r.curso)];const nk=norm(r.apellidos+" "+r.nombres);
+    const ex=OF.ests.find(e=>(r.documento&&e.documento&&digits(e.documento)===digits(r.documento))||(e.curso_id===c.id&&norm(e.apellidos+" "+e.nombres)===nk));
+    if(ex)act++;else nuevos++;
+    rows.push({id:ex?ex.id:nid(),inst_id:INST.m.inst_id,curso_id:c.id,apellidos:r.apellidos,nombres:r.nombres,tipo_doc:ex?ex.tipo_doc:"TI",documento:r.documento||(ex?ex.documento:""),acudiente:r.acudiente||(ex?ex.acudiente:""),telefono:r.telefono||(ex?ex.telefono:""),correo:ex?ex.correo:"",activo:true});}
+   plan={cursos:Object.values(nuevosC),rows};
+   $("#io_p").innerHTML=out.length?`${out.length} estudiante(s): ${nuevos} nuevo(s), ${act} actualizado(s).${plan.cursos.length?` Se crearán ${plan.cursos.length} curso(s): ${plan.cursos.map(c=>esc(c.nombre)).join(", ")}.`:""}${err.length?` <span style="color:var(--bad)">Filas omitidas por faltar datos: ${err.slice(0,10).join(", ")}${err.length>10?"…":""}.</span>`:""}`:(err.length?`<span style="color:var(--bad)">No se reconocieron filas válidas.</span>`:"");
+   $("#io_ok").disabled=!out.length;};
+  $("#io_t",sh).oninput=parse;
+  $("#io_f",sh).onchange=async e=>{const f=e.target.files[0];if(!f)return;let t=await f.text();if(/�/.test(t)){const b=await f.arrayBuffer();t=new TextDecoder("windows-1252").decode(b);}$("#io_t").value=t.replace(/^﻿/,"");parse();};
+  $("#io_ok",sh).onclick=async ev=>{if(!plan)return;ev.target.disabled=true;$("#io_p").textContent="Importando…";
+   try{if(plan.cursos.length){const {error}=await sb.from("inst_cursos").insert(plan.cursos);if(error)throw error;}
+    for(let i=0;i<plan.rows.length;i+=300){const {error}=await sb.from("inst_estudiantes").upsert(plan.rows.slice(i,i+300));if(error)throw error;$("#io_p").textContent=`Importando… ${Math.min(i+300,plan.rows.length)} de ${plan.rows.length}`;}
+    await loadOficial(true);closeModal();toast(`${plan.rows.length} estudiantes importados`);sched();}catch(e){ev.target.disabled=false;$("#io_p").innerHTML=`<span style="color:var(--bad)">${esc(avErr(e))}</span>`;}};
+ });}
 /* ---------- PORTAL DEL ESTUDIANTE ---------- */
 const PT={mats:[],pubs:[],err:"",loading:false,filtro:"",unirse:false,join:null,joinErr:"",q:""};let joinPend=null;
 async function loadPortal(){if(PT.loading)return;PT.loading=true;$("#main").innerHTML=`<div class="load">Cargando tus clases…</div>`;

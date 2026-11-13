@@ -68,6 +68,15 @@ En **Asistencia**:
 - **Inasistencias del día**: estudiantes con falta en la fecha elegida, por curso, con mensaje listo para el grupo de WhatsApp del curso y botón para escribir a cada acudiente (si su teléfono está en la ficha). Opcionalmente incluye faltas con excusa, tardanzas y uniforme. Las plantillas de mensaje se editan ahí mismo.
 - Los informes incluyen las clases en las que el docente tomó asistencia.
 
+## Listas oficiales y carga académica
+
+Cuando el colegio usa el módulo de coordinación, los docentes **no** registran estudiantes:
+
+1. Coordinación, en **Coordinación → Listas oficiales**, importa los estudiantes (copiando desde Excel las columnas Curso · Apellidos · Nombres · Documento · Acudiente · Teléfono; los cursos se crean solos) y registra el catálogo de asignaturas. Puede volver a importar la lista: los estudiantes existentes se actualizan, no se duplican.
+2. Cada docente, en **Ajustes → Mi carga académica**, marca sus asignaturas y los cursos de cada una (con atajo "todo el grado"). Sus estudiantes aparecen automáticamente.
+3. El docente puede tomar la foto, escribir observaciones y registrar la autorización de datos, pero no cambia nombres ni crea o borra estudiantes. Los cambios de coordinación (nuevos estudiantes, retiros, cambios de curso) llegan a cada docente al abrir la aplicación.
+4. Como todos usan los mismos identificadores, coordinación reconoce a cada estudiante sin depender de cómo se escriba su nombre.
+
 ## Módulo de coordinación
 
 1. La coordinadora ingresa con su cuenta y en **Ajustes → Institución** toca **Crear la institución**. Recibe dos códigos: uno para docentes y otro para otras personas de coordinación.
