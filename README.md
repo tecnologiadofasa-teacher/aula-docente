@@ -68,6 +68,20 @@ En **Asistencia**:
 - **Inasistencias del día**: estudiantes con falta en la fecha elegida, por curso, con mensaje listo para el grupo de WhatsApp del curso y botón para escribir a cada acudiente (si su teléfono está en la ficha). Opcionalmente incluye faltas con excusa, tardanzas y uniforme. Las plantillas de mensaje se editan ahí mismo.
 - Los informes incluyen las clases en las que el docente tomó asistencia.
 
+## Módulo de coordinación
+
+1. La coordinadora ingresa con su cuenta y en **Ajustes → Institución** toca **Crear la institución**. Recibe dos códigos: uno para docentes y otro para otras personas de coordinación.
+2. Cada docente escribe el código en **Ajustes → Institución**.
+3. En **Coordinación** aparecen:
+   - **Hoy**: inasistencias del día de todos los cursos, sin importar qué docente tomó la lista; se actualiza cada minuto. Mensaje para el grupo del curso y WhatsApp al acudiente.
+   - **Consolidado**: asistencia y uniforme por rango de fechas o por trimestre, con CSV.
+   - **Alertas**: estudiantes que superan el porcentaje de inasistencia definido en el SIEE (crítico y preventivo) o que llevan varios días seguidos sin asistir.
+   - **Excusas**: al aprobarlas, las faltas de esas fechas cuentan como justificadas en todas las asignaturas. Los docentes ven que la falta está excusada, pero no el motivo.
+   - **Observador**: anotaciones y situaciones de convivencia tipo I, II y III (Ley 1620 de 2013), con acciones, compromisos, remisión y seguimiento. Solo lo ve coordinación.
+   - **Institución**: códigos, miembros y parámetros de alertas.
+
+La coordinación **no** tiene acceso a calificaciones, actividades, evidencias ni al aula virtual de los docentes; la base de datos lo impide. Los estudiantes de un mismo curso registrados por distintos docentes se reconocen por el nombre del curso y el nombre completo (o el documento), así que conviene que todos usen el mismo nombre de curso y la misma lista.
+
 ## Aula virtual y acceso de estudiantes
 
 1. En **Aula virtual**, genera un código para cada clase (curso + asignatura) y usa **Copiar invitación** para enviarlo por WhatsApp o correo.

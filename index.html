@@ -173,6 +173,9 @@ body.nologin #gear{display:none}
 .mrc{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}.mb{border:1px solid var(--line);background:#fff;border-radius:20px;padding:2px 9px;font-size:11.5px;cursor:pointer;color:var(--mut)}.mb.on{background:#6c3483;border-color:#6c3483;color:#fff;font-weight:600}
 .msg{white-space:pre-wrap;background:#e9f7ef;border:1px solid #cdebd8;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:10px}
 .btn.wa{background:#1f8f4e;border-color:#1f8f4e;color:#fff}
+body.vcoord .ctx{display:none}
+.tabs{display:flex;gap:4px;overflow-x:auto;margin-bottom:12px;border-bottom:1px solid var(--line)}.tabs button{border:0;background:none;padding:8px 10px;font-size:14px;color:var(--mut);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent}.tabs button.on{color:var(--pri);border-bottom-color:var(--pri);font-weight:650}
+.tag.mk2{background:#efe3f5;color:#6c3483}
 .load{display:flex;align-items:center;justify-content:center;min-height:50vh;color:var(--mut);flex-direction:column;gap:8px;text-align:center;padding:20px}
 </style>
 </head>
@@ -246,7 +249,7 @@ function strip(o){const c={...o};delete c.id;return c;}
 async function put(col,obj){S[col][obj.id]=obj;sched();await dbSet(col,obj.id,strip(obj));}
 async function del(col,id){delete S[col][id];sched();await dbDel(col,id);}
 let cfgChain=Promise.resolve();
-function saveCfg(patch){const next={...cfg(),...patch};S.cfg=next;sched();cfgChain=cfgChain.then(()=>dbSet("config","config",next)).catch(e=>{toast(dbMsg(e),true);});return cfgChain;}
+function saveCfg(patch){const next={...cfg(),...patch};S.cfg=next;sched();cfgChain=cfgChain.then(()=>dbSet("config","config",next)).then(()=>{if(INST.m)return syncMeta();}).catch(e=>{toast(dbMsg(e),true);});return cfgChain;}
 
 /* ---------- arranque (Supabase) ---------- */
 let lastLoad=0,loading=false;
@@ -260,7 +263,7 @@ async function boot(){
 }
 let sessInit=false,modoEst=false;
 function setSession(s){const nu=s&&s.user?s.user.id:null;session=s;if(nu===uid&&sessInit)return;sessInit=true;uid=nu;
- AV.loaded=false;AV.urls={};PT.mats=[];PT.pubs=[];
+ AV.loaded=false;AV.urls={};PT.mats=[];PT.pubs=[];INST.m=null;INST.inst=null;INST.exc=[];INST.meta=null;INST.cargado=false;CO.loaded=false;CO.rango=null;
  if(!uid){modoEst=false;ready=false;for(const k of Object.keys(COL))S[k]={};S.cfg=null;renderLogin();return;}
  if(s.user.is_anonymous){modoEst=true;loadPortal();return;}
  modoEst=false;
@@ -270,12 +273,12 @@ function setSession(s){const nu=s&&s.user?s.user.id:null;session=s;if(nu===uid&&
 async function loadAll(){if(loading||!uid)return;loading=true;
  try{const nx={};for(const k of Object.keys(COL))nx[k]={};let cfgD=null,from=0;const step=1000;
   for(;;){const {data,error}=await sb.from("docs").select("col,id,data").eq("user_id",uid).order("col").order("id").range(from,from+step-1);if(error)throw error;
-   for(const r of data){if(r.col==="config")cfgD=r.data;else if(nx[r.col])nx[r.col][r.id]={...r.data,id:r.id};}
+   for(const r of data){if(r.col==="config")cfgD=r.data;else if(r.col==="meta")INST.meta=r.data;else if(nx[r.col])nx[r.col][r.id]={...r.data,id:r.id};}
    if(data.length<step)break;from+=step;}
   for(const k of Object.keys(COL)){for(const id of Object.keys(wq).filter(x=>x.startsWith(k+"/")).map(x=>x.slice(k.length+1)))if(pend(k,id)){if(S[k][id])nx[k][id]=S[k][id];else delete nx[k][id];}S[k]=nx[k];}
   S.cfg=cfgD?{..._def,...cfgD}:null;loadErr="";lastLoad=Date.now();ready=true;
  }catch(e){loadErr=dbMsg(e);ready=true;}
- loading=false;sched();}
+ loading=false;sched();if(!modoEst)loadInst();}
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&uid&&Date.now()-lastLoad>30000)loadAll();});
 function renderLogin(){document.body.classList.add("nologin");$("#who").textContent="";
  $("#main").innerHTML=`<div class="login card"><h2>Aula Docente</h2><p class="mut sm">Registro de estudiantes, calificaciones, asistencia y evidencias. Cada docente tiene su propia cuenta y sus datos son privados.</p>
@@ -310,9 +313,9 @@ function editing(){const a=document.activeElement;return a&&$("#main").contains(
 function render(){fixCtx();renderCtx();renderNav();if(editing()){dirty=true;return;}dirty=false;renderMain();}
 document.addEventListener("focusout",()=>setTimeout(()=>{if(dirty&&!editing()&&$("#modal").classList.contains("hidden"))render();},120));
 
-const ICON={semana:'<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 3v3M16 3v3M8 13h2M14 13h2M8 17h2M14 17h2"/>',aula:'<path d="M4 10v4a1 1 0 0 0 1 1h2l5 4V5L7 9H5a1 1 0 0 0-1 1z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/>',inicio:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',estudiantes:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14.5c2.4.2 4 1.7 4.5 4.5"/>',asistencia:'<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v3M16 3v3M8.5 14.5l2.3 2.3 4.7-4.7"/>',calificaciones:'<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',evidencias:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v6M9 14l3-3 3 3"/>',ajustes:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'};
-const VIEWS=[["semana","Semana","Semana"],["estudiantes","Estudiantes","Estudiantes"],["asistencia","Asistencia","Asistencia"],["calificaciones","Calificaciones","Notas"],["evidencias","Evidencias","Evidencias"],["aula","Aula virtual","Aula"],["ajustes","Ajustes","Ajustes"]];
-function renderNav(){$("#nav").innerHTML=VIEWS.map(([k,l,s])=>`<a href="#${k}" class="${UI.view===k?"on":""} ${k==="ajustes"?"dsk":""}"><svg viewBox="0 0 24 24">${ICON[k]}</svg><span class="ll">${l}</span><span class="ls">${s}</span></a>`).join("");}
+const ICON={coord:'<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-4.5"/>',semana:'<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 3v3M16 3v3M8 13h2M14 13h2M8 17h2M14 17h2"/>',aula:'<path d="M4 10v4a1 1 0 0 0 1 1h2l5 4V5L7 9H5a1 1 0 0 0-1 1z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/>',inicio:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',estudiantes:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14.5c2.4.2 4 1.7 4.5 4.5"/>',asistencia:'<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v3M16 3v3M8.5 14.5l2.3 2.3 4.7-4.7"/>',calificaciones:'<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',evidencias:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v6M9 14l3-3 3 3"/>',ajustes:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'};
+const VIEWS=[["semana","Semana","Semana"],["estudiantes","Estudiantes","Estudiantes"],["asistencia","Asistencia","Asistencia"],["calificaciones","Calificaciones","Notas"],["evidencias","Evidencias","Evidencias"],["aula","Aula virtual","Aula"],["coord","Coordinación","Coord."],["ajustes","Ajustes","Ajustes"]];
+function renderNav(){const co=typeof esCoord==="function"&&esCoord(),solo=co&&!Object.keys(S.cursos).length;document.body.classList.toggle("vcoord",UI.view==="coord");$("#nav").innerHTML=VIEWS.filter(([k])=>solo?(k==="coord"||k==="ajustes"):(k!=="coord"||co)).map(([k,l,s])=>`<a href="#${k}" class="${UI.view===k?"on":""} ${k==="ajustes"&&!solo?"dsk":""}"><svg viewBox="0 0 24 24">${ICON[k]}</svg><span class="ll">${l}</span><span class="ls">${s}</span></a>`).join("");}
 function readHash(){const h=location.hash.slice(1);UI.view=VIEWS.some(v=>v[0]===h)?h:"semana";}
 window.addEventListener("hashchange",()=>{readHash();dirty=false;renderNav();renderMain();window.scrollTo(0,0);});
 
@@ -356,7 +359,7 @@ const codTipo=c=>((cfg().codigos.find(x=>x.c===c))||{}).tipo||"registro";
 const asisKey=(cid,aid,f)=>`${cid}__${aid}__${f}`;
 const marcasCfg=()=>Array.isArray(cfg().marcas)?cfg().marcas:_def.marcas;
 function resMarcas(eid,cid,aid,pid){const r={};for(const d of Object.values(S.asis)){if(d.cursoId!==cid||d.asigId!==aid||(pid&&d.perId!==pid))continue;const m=(d.extra||{})[eid];if(m)r[m]=(r[m]||0)+1;}return r;}
-function resAsis(eid,cid,aid,pid){const r={ses:0,falta:0,just:0,tarde:0};for(const d of Object.values(S.asis)){if(d.cursoId!==cid||d.asigId!==aid||(pid&&d.perId!==pid))continue;const c=(d.reg||{})[eid];if(!c)continue;r.ses++;const t=codTipo(c);if(t==="falta")r.falta++;else if(t==="justificada")r.just++;else if(t==="tarde")r.tarde++;}r.pct=r.ses?Math.round(100*(r.ses-r.falta-r.just)/r.ses):null;return r;}
+function resAsis(eid,cid,aid,pid){const r={ses:0,falta:0,just:0,tarde:0};for(const d of Object.values(S.asis)){if(d.cursoId!==cid||d.asigId!==aid||(pid&&d.perId!==pid))continue;const c=(d.reg||{})[eid];if(!c)continue;r.ses++;const t=tipoReg(d,eid);if(t==="falta")r.falta++;else if(t==="justificada")r.just++;else if(t==="tarde")r.tarde++;}r.pct=r.ses?Math.round(100*(r.ses-r.falta-r.just)/r.ses):null;return r;}
 
 /* ---------- elementos comunes ---------- */
 function ini(e){const a=(e.nombres||"").trim()[0]||"",b=(e.apellidos||"").trim()[0]||"";return esc((a+b).toUpperCase()||"?");}
@@ -368,7 +371,7 @@ function renderMain(){
  const m=$("#main");
  if(!uid||modoEst)return;
  if(!ready){m.innerHTML=banners()+`<div class="load">Cargando tus datos…</div>`;return;}
- const f={semana:vInicio,aula:vAula,estudiantes:vEstudiantes,asistencia:vAsistencia,calificaciones:vNotas,evidencias:vEvidencias,ajustes:vAjustes}[UI.view];
+ const f={semana:vInicio,aula:vAula,coord:vCoord,estudiantes:vEstudiantes,asistencia:vAsistencia,calificaciones:vNotas,evidencias:vEvidencias,ajustes:vAjustes}[UI.view];
  m.innerHTML=banners()+f();
  if(UI.view==="estudiantes")renderEstList();
 }
@@ -499,7 +502,7 @@ function vAsistencia(){
  <div class="card"><div class="f2"><label class="f">Fecha<input type="date" id="as_f" value="${UI.fecha}"></label><label class="f">Periodo<input type="text" value="${esc(perN)}${perF?"":" (por selección)"}" disabled></label></div>
  <label class="f">Tema de la clase<input type="text" id="as_tema" value="${esc(d&&d.tema||"")}" placeholder="Opcional"></label><label class="f">Observaciones de la clase<textarea id="as_obs" placeholder="Opcional" style="min-height:56px">${esc(d&&d.obs||"")}</textarea></label>
  <div class="row sm"><button class="btn sm" data-go="todosP">Marcar presentes a los demás</button>${d?`<button class="btn sm dan" data-go="borrarDia">Borrar este día</button>`:""}<span class="sp"></span><span class="mut">${cods.map(c=>`${esc(c.c)}: ${cnt[c.c]||0}`).join(" · ")} · Sin marcar: ${es.length-Object.keys(cnt).reduce((s,x)=>s+cnt[x],0)}${mcs.map(m=>{const n=es.filter(e=>ext[e.id]===m.c).length;return n?` · ${esc(m.nombre)}: ${n}`:"";}).join("")}</span></div></div>
- <div class="card"><div class="list">${es.length?es.map(e=>`<div class="it">${av(e,"s")}<div class="nm"><b>${esc(nomEst(e))}</b>${mcs.length?`<div class="mrc">${mcs.map(m=>`<button class="mb ${ext[e.id]===m.c?"on":""}" data-marca="${e.id}" data-c="${esc(m.c)}">${esc(m.nombre)}</button>`).join("")}</div>`:""}</div><div class="codes">${cods.map(c=>`<button class="cb ${codTipo(c.c)} ${reg[e.id]===c.c?"on":""}" data-mark="${e.id}" data-c="${esc(c.c)}" title="${esc(c.nombre)}">${esc(c.c)}</button>`).join("")}</div></div>`).join(""):'<div class="empty">No hay estudiantes en este curso.</div>'}</div>
+ <div class="card"><div class="list">${es.length?es.map(e=>`<div class="it">${av(e,"s")}<div class="nm"><b>${esc(nomEst(e))}</b>${excusado(cur.id,e.id,UI.fecha)?'<span class="tag ok">Excusa aprobada por coordinación</span>':""}${mcs.length?`<div class="mrc">${mcs.map(m=>`<button class="mb ${ext[e.id]===m.c?"on":""}" data-marca="${e.id}" data-c="${esc(m.c)}">${esc(m.nombre)}</button>`).join("")}</div>`:""}</div><div class="codes">${cods.map(c=>`<button class="cb ${codTipo(c.c)} ${reg[e.id]===c.c?"on":""}" data-mark="${e.id}" data-c="${esc(c.c)}" title="${esc(c.nombre)}">${esc(c.c)}</button>`).join("")}</div></div>`).join(""):'<div class="empty">No hay estudiantes en este curso.</div>'}</div>
  <div class="mut sm" style="margin-top:8px">${cods.map(c=>`<b>${esc(c.c)}</b> ${esc(c.nombre)}`).join(" · ")}. ${mcs.length?` La marca de uniforme se registra aparte de la asistencia.`:""} Los cambios se guardan solos.</div></div>`;
  h+=`<div class="card"><h3>Clases registradas en ${esc((cfg().periodos.find(p=>p.id===ctx.p)||{}).nombre||"el periodo")}</h3>${fechas.length?`<div class="hist">${fechas.map(f=>`<button data-fecha="${f}" class="${f===UI.fecha?"on":""}">${fFecha(f)}</button>`).join("")}</div>`:'<div class="mut sm">Aún no hay clases registradas en este periodo.</div>'}</div>`;
  h+=`<div class="card"><h3>Consolidado del periodo</h3><div class="tw"><table class="g"><thead><tr><th class="st">Estudiante</th><th>Clases</th><th>Fallas</th><th>Justif.</th><th>Tardes</th><th>% asist.</th>${mcs.map(m=>`<th>${esc(m.nombre)}</th>`).join("")}</tr></thead><tbody>${es.map(e=>{const r=resAsis(e.id,cur.id,as.id,ctx.p),rm=resMarcas(e.id,cur.id,as.id,ctx.p);return `<tr><td class="st">${esc(nomEst(e))}</td><td>${r.ses}</td><td style="${r.falta>=(+cfg().alertaFallas||3)?"color:var(--bad);font-weight:700":""}">${r.falta}</td><td>${r.just}</td><td>${r.tarde}</td><td>${r.pct==null?"—":r.pct+"%"}</td>${mcs.map(m=>`<td>${rm[m.c]||0}</td>`).join("")}</tr>`;}).join("")}</tbody></table></div></div>`;
@@ -676,6 +679,7 @@ function vAjustes(){
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Periodos académicos</h3><button class="btn sm" data-go="periodos">Editar</button></div>${sumP!==100?`<div class="banner" style="margin:8px 0 0">Los pesos suman ${sumP}%. El acumulado se normaliza, pero conviene que sumen 100%.</div>`:""}<div class="list">${c.periodos.map(p=>`<div class="it"><div class="nm"><b>${esc(p.nombre)}</b><span class="mut sm">${p.inicio?fFecha(p.inicio)+" a "+fFecha(p.fin):"Sin fechas"}</span></div><span class="tag">${esc(p.peso)}%</span></div>`).join("")}</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Escala de valoración</h3><button class="btn sm" data-go="escala">Editar</button></div><div class="sm" style="margin-top:6px">De ${esc(E.min)} a ${esc(E.max)} · aprueba con ${esc(E.aprob)} · ${esc(E.dec)} decimal(es)</div><div class="row" style="margin-top:6px">${niveles().map(d=>`<span class="dtag"><i style="background:${d.color}"></i>${esc(d.nombre)} ${esc(d.desde)}–${esc(d.hasta)}</span>`).join("")}</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Códigos de asistencia</h3><button class="btn sm" data-go="codigos">Editar</button></div><div class="row" style="margin-top:6px">${c.codigos.map(x=>`<span class="tag">${esc(x.c)} · ${esc(x.nombre)} (${esc(TIPOS[x.tipo]||x.tipo)})</span>`).join("")}</div>${marcasCfg().length?`<div class="sm mut" style="margin-top:6px">Marcas adicionales: ${marcasCfg().map(m=>esc(m.nombre)).join(", ")}</div>`:""}</div>
+ ${cardInstitucion()}
  <div class="card"><h3>Instalar en el dispositivo</h3><div class="sm mut">${instEv?"Este navegador permite instalar Aula Docente como aplicación, con su propio ícono.":window.matchMedia("(display-mode: standalone)").matches?"Ya estás usando la aplicación instalada.":"En Android abre esta página en Chrome y elige ⋮ → Instalar aplicación. En iPhone, en Safari: Compartir → Agregar a inicio."}</div>${instEv?`<div class="row" style="margin-top:8px"><button class="btn sm pri" data-go="instalar">Instalar aplicación</button></div>`:""}</div>
  <div class="card"><h3>Google Drive</h3><div class="sm">${c.drive&&c.drive.rootId?`Carpeta principal creada. <a href="https://drive.google.com/drive/folders/${esc(c.drive.rootId)}" target="_blank" rel="noopener">Abrir en Drive</a> · ${Object.keys(c.drive.carpetas||{}).length} subcarpeta(s) por curso y asignatura.`:"La carpeta se crea automáticamente con la primera evidencia que subas."}</div><div class="row" style="margin-top:8px">${driveOn()?`<button class="btn sm" data-go="probarDrive">Conectar y crear carpeta</button>`:`<span class="mut sm">Google Drive no está configurado (falta GOOGLE_CLIENT_ID en config.js).</span>`}${c.drive&&c.drive.rootId?`<button class="btn sm dan" data-go="resetDrive">Olvidar carpetas</button>`:""}</div></div>
  <div class="card"><h3>Copia de seguridad</h3><div class="sm mut">Descarga todos tus registros (incluidas las fotografías) en un archivo .json o restaura uno anterior.</div><div class="row" style="margin-top:8px">${downloads?`<button class="btn sm" data-go="backup">Descargar copia</button>`:""}<label class="btn sm">Restaurar copia<input type="file" accept=".json,application/json" id="restore" hidden></label></div></div>`;
@@ -759,7 +763,7 @@ function ask(msg,ok="Confirmar",danger){return new Promise(res=>{$("#cfs").inner
 
 /* ---------- eventos de la vista ---------- */
 $("#main").addEventListener("click",async e=>{
- const t=e.target.closest("[data-marca],[data-qact],[data-week],[data-slot],[data-cod],[data-quitar],[data-pub],[data-go],[data-est],[data-mark],[data-fecha],[data-evact],[data-act],[data-evid],[data-curso],[data-asig],[data-evp]");if(!t)return;
+ const t=e.target.closest("[data-co],[data-cot],[data-marca],[data-qact],[data-week],[data-slot],[data-cod],[data-quitar],[data-pub],[data-go],[data-est],[data-mark],[data-fecha],[data-evact],[data-act],[data-evid],[data-curso],[data-asig],[data-evp]");if(!t)return;
  const d=t.dataset;
  if(d.qact){crearCasilla(d.qact);return;}
  if(d.week!=null){UI.semana=+d.week===0?lunesDe(hoy()):addD(UI.semana||lunesDe(hoy()),+d.week);renderMain();return;}
@@ -767,6 +771,8 @@ $("#main").addEventListener("click",async e=>{
  if(d.cod){accionCodigo(d.cod,t);return;}
  if(d.quitar){quitarAcceso(d.quitar);return;}
  if(d.pub){formPub(AV.pubs.find(x=>x.id===d.pub));return;}
+ if(d.cot){CO.tab=d.cot;CO.curso=CO.curso||"";CO.estado="";return renderMain();}
+ if(d.co){accionCo(d.co,t);return;}
  if(d.marca){const doc=asisDoc();if(doc.extra[d.marca]===d.c)delete doc.extra[d.marca];else doc.extra[d.marca]=d.c;queueSave("asis",doc.id,500);
   $$(`[data-marca="${d.marca}"]`).forEach(b=>b.classList.toggle("on",b.dataset.c===doc.extra[d.marca]));return;}
  if(d.mark){const doc=asisDoc();if(doc.reg[d.mark]===d.c)delete doc.reg[d.mark];else doc.reg[d.mark]=d.c;queueSave("asis",doc.id,500);
@@ -783,6 +789,9 @@ $("#main").addEventListener("click",async e=>{
   case"datos":return formDatos();case"curso":return formCurso();case"asig":return formAsig();
   case"est":if(!cursosArr().length)return toast("Primero crea un curso.",true);return formEst(null);
   case"imp":return importar();
+  case"unirInst":return unirInst();
+  case"crearInst":return crearInst();
+  case"salirInst":return salirInst();
   case"inas":UI.inas=null;return inasistencias();
   case"cons":UI.cons=null;return consolidado();
   case"stats":return estadisticas();
@@ -805,9 +814,14 @@ $("#main").addEventListener("click",async e=>{
   case"resetDrive":{if(await ask("La app dejará de usar las carpetas actuales y creará unas nuevas con la próxima evidencia. Tus archivos en Drive no se borran. ¿Continuar?","Continuar"))saveCfg({drive:{rootId:"",carpetas:{}}});return;}
  }
 });
-$("#main").addEventListener("input",e=>{if(e.target.id==="q"){UI.q=e.target.value;renderEstList();}});
+$("#main").addEventListener("input",e=>{if(e.target.id==="q"){UI.q=e.target.value;renderEstList();}if(e.target.id==="co_q"){CO.q=e.target.value;clearTimeout(CO._t);CO._t=setTimeout(()=>{const pos=e.target.selectionStart;renderMain();const n=$("#co_q");if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(x){}}},350);}});
 $("#main").addEventListener("change",e=>{
  const t=e.target;
+ if(t.id==="co_f"){CO.f=t.value||hoy();t.blur();return renderMain();}
+ if(t.id==="co_cur"){CO.curso=t.value;return renderMain();}
+ if(t.id==="co_d"||t.id==="co_h"){CO[t.id==="co_d"?"desde":"hasta"]=t.value;t.blur();return renderMain();}
+ if(t.id==="co_est"){CO.estado=t.value;return renderMain();}
+ if(t.id==="co_cla"){CO.clase=t.value;return renderMain();}
  if(t.id==="fCur"){UI.cursoFiltro=t.value;renderEstList();return;}
  if(t.id==="restore"){const f=t.files[0];t.value="";if(f)restaurar(f);return;}
  if(t.id==="showComp"){UI.showComp=t.checked;renderMain();return;}
@@ -1062,7 +1076,7 @@ function svgPNG(svg,nombre){if(!svg)return;const xml=new XMLSerializer().seriali
 
 /* ---------- INFORMES DE ASISTENCIA ---------- */
 function asisFiltro(o){return Object.values(S.asis).filter(d=>(!o.cursoId||d.cursoId===o.cursoId)&&(!o.asigId||d.asigId===o.asigId)&&(o.perId?d.perId===o.perId:true)&&(!o.desde||d.fecha>=o.desde)&&(!o.hasta||d.fecha<=o.hasta)&&S.cursos[d.cursoId]);}
-function resumenEst(eid,docs){const r={ses:0,falta:0,just:0,tarde:0,m:{}};for(const d of docs){const c=(d.reg||{})[eid];const x=(d.extra||{})[eid];if(x)r.m[x]=(r.m[x]||0)+1;if(!c)continue;r.ses++;const t=codTipo(c);if(t==="falta")r.falta++;else if(t==="justificada")r.just++;else if(t==="tarde")r.tarde++;}r.pct=r.ses?Math.round(100*(r.ses-r.falta-r.just)/r.ses):null;return r;}
+function resumenEst(eid,docs){const r={ses:0,falta:0,just:0,tarde:0,m:{}};for(const d of docs){const c=(d.reg||{})[eid];const x=(d.extra||{})[eid];if(x)r.m[x]=(r.m[x]||0)+1;if(!c)continue;r.ses++;const t=tipoReg(d,eid);if(t==="falta")r.falta++;else if(t==="justificada")r.just++;else if(t==="tarde")r.tarde++;}r.pct=r.ses?Math.round(100*(r.ses-r.falta-r.just)/r.ses):null;return r;}
 function consolidado(){
  const F=UI.cons||(UI.cons={curso:ctx.c||"",asig:"",modo:"per",per:ctx.p,desde:((cfg().periodos.find(p=>p.id===ctx.p)||{}).inicio)||"",hasta:hoy()});
  const mcs=marcasCfg();const cursos=F.curso?[S.cursos[F.curso]].filter(Boolean):cursosArr();
@@ -1106,7 +1120,7 @@ function inasistencias(){
  const cursos=F.curso?[S.cursos[F.curso]].filter(Boolean):cursosArr();
  const bloques=cursos.map(cu=>{const docs=Object.values(S.asis).filter(d=>d.cursoId===cu.id&&d.fecha===F.fecha);
   const lista=[];for(const e of estsCurso(cu.id)){const det=[];
-   for(const d of docs){const cod=(d.reg||{})[e.id],t=cod?codTipo(cod):"",x=(d.extra||{})[e.id];const an=(S.asigs[d.asigId]||{}).nombre||"";
+   for(const d of docs){const cod=(d.reg||{})[e.id],t=cod?tipoReg(d,e.id):"",x=(d.extra||{})[e.id];const an=(S.asigs[d.asigId]||{}).nombre||"";
     if((F.falta&&t==="falta")||(F.just&&t==="justificada")||(F.tarde&&t==="tarde"))det.push({t,txt:`${(c.codigos.find(k=>k.c===cod)||{}).nombre||cod} en ${an}`});
     if(F.marcas&&x)det.push({t:"marca",txt:`${(mcs.find(m=>m.c===x)||{}).nombre||x} en ${an}`});}
    if(det.length)lista.push({e,det});}
@@ -1133,6 +1147,232 @@ function inasistencias(){
  });
 }
 
+/* ---------- INSTITUCIÓN (lado docente) ---------- */
+const norm=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+const digits=s=>String(s||"").replace(/\D/g,"");
+const INST={m:null,inst:null,exc:[],meta:null,cargado:false};
+const esCoord=()=>!!(INST.m&&INST.m.rol==="coordinador");
+async function loadInst(){
+ try{const {data:m,error}=await sb.from("miembros").select("*").eq("user_id",uid);if(error)throw error;INST.m=(m||[])[0]||null;
+  if(INST.m){const {data:i}=await sb.from("instituciones").select("*").eq("id",INST.m.inst_id);INST.inst=(i||[])[0]||null;const {data:e}=await sb.rpc("excusas_aprobadas");INST.exc=e||[];await syncMeta();}
+  else{INST.inst=null;INST.exc=[];}}catch(e){INST.m=null;}
+ INST.cargado=true;
+ if(esCoord()&&!location.hash&&!cursosArr().length){location.hash="coord";return;}
+ sched();}
+async function syncMeta(){if(!INST.m)return;const meta={docente:cfg().docente||"",codigos:cfg().codigos,marcas:marcasCfg()};
+ if(JSON.stringify(meta)===JSON.stringify(INST.meta))return;try{await dbSet("meta","asistencia",meta);INST.meta=meta;}catch(e){}}
+function excusado(cid,eid,f){if(!INST.exc.length)return false;const c=S.cursos[cid],e=S.ests[eid];if(!c||!e)return false;const cn=norm(c.nombre),k=norm((e.apellidos||"")+" "+(e.nombres||"")),d=digits(e.documento);
+ return INST.exc.some(x=>x.curso===cn&&f>=String(x.desde)&&f<=String(x.hasta)&&(x.est_key===k||(d&&x.est_doc===d)));}
+function tipoReg(d,eid){const c=(d.reg||{})[eid];if(!c)return"";const t=codTipo(c);return t==="falta"&&excusado(d.cursoId,eid,d.fecha)?"justificada":t;}
+function cardInstitucion(){
+ if(!INST.cargado)return "";
+ if(INST.m)return `<div class="card"><h3>Institución</h3><div class="sm">Perteneces a <b>${esc((INST.inst||{}).nombre||"")}</b> como ${INST.m.rol==="coordinador"?"coordinador(a)":"docente"}.</div>
+  <div class="sm mut" style="margin-top:6px">La coordinación puede ver tus cursos, la lista de estudiantes con sus datos de contacto, los nombres de tus asignaturas y la asistencia que registras. No ve calificaciones, actividades, evidencias ni el aula virtual.</div>
+  <div class="row" style="margin-top:8px">${esCoord()?`<a class="btn sm pri" href="#coord">Ir a Coordinación</a>`:""}<button class="btn sm dan" data-go="salirInst">Salir de la institución</button></div></div>`;
+ return `<div class="card"><h3>Institución</h3><div class="sm mut">Si tu colegio usa el módulo de coordinación, escribe el código que te entregó la coordinación. Así podrá consultar la asistencia y el uniforme de tus clases (no tus calificaciones).</div>
+  <div class="row" style="margin-top:8px"><input type="text" id="inst_cod" placeholder="Código de la institución" autocapitalize="characters" style="flex:1 1 160px"><button class="btn sm pri" data-go="unirInst">Unirme</button></div>
+  <div class="sm" style="margin-top:10px">¿Eres coordinador(a)? <button class="lnk sm" data-go="crearInst">Crear la institución</button></div></div>`;}
+async function unirInst(){const c=($("#inst_cod")||{}).value||"";if(!c.trim())return toast("Escribe el código.",true);
+ const u=session.user,md=u.user_metadata||{};const {data,error}=await sb.rpc("unirse_institucion",{p_codigo:c.trim().toUpperCase(),p_nombre:cfg().docente||md.full_name||md.name||"",p_email:u.email||""});
+ const r=error?{ok:false,msg:error.message}:(data||{});if(!r.ok)return toast(r.error==="codigo"?"El código no corresponde a ninguna institución.":r.error==="ya_miembro"?"Ya perteneces a una institución.":"No fue posible unirte"+(r.msg?": "+r.msg:"."),true);
+ toast(`Te uniste a ${r.nombre} como ${r.rol==="coordinador"?"coordinador(a)":"docente"}`);await loadInst();}
+function crearInst(){openModal(`<div class="hd"><h3>Crear institución</h3><button class="x" data-close>×</button></div>
+ <p class="sm mut">Quedarás como coordinador(a). Recibirás un código para los docentes y otro para otras personas de coordinación.</p>
+ <label class="f">Nombre de la institución<input type="text" id="ci_n" value="${esc(cfg().institucion||"")}"></label><label class="f">Tu nombre<input type="text" id="ci_m" value="${esc(cfg().docente||"")}"></label>
+ <div class="ft"><button class="btn pri" id="ci_ok">Crear</button></div>`,sh=>{$("#ci_ok",sh).onclick=async ev=>{const n=$("#ci_n").value.trim();if(n.length<3)return toast("Escribe el nombre de la institución.",true);ev.target.disabled=true;
+  const {data,error}=await sb.rpc("crear_institucion",{p_nombre:n,p_minombre:$("#ci_m").value.trim(),p_email:session.user.email||""});const r=error?{ok:false,msg:error.message}:(data||{});
+  if(!r.ok){ev.target.disabled=false;return toast(r.error==="ya_miembro"?"Ya perteneces a una institución.":/function|does not exist/i.test(r.msg||"")?"Falta actualizar la base de datos: ejecuta de nuevo supabase/schema.sql.":"No fue posible crearla"+(r.msg?": "+r.msg:"."),true);}
+  closeModal();toast("Institución creada");await loadInst();location.hash="coord";};});}
+async function salirInst(){if(!await ask(esCoord()?"Si sales, dejarás de tener acceso al módulo de coordinación. Si eres la única persona de coordinación, nadie podrá administrarlo. ¿Salir?":"La coordinación dejará de ver la asistencia de tus clases. ¿Salir de la institución?","Salir",true))return;
+ const {error}=await sb.from("miembros").delete().eq("user_id",uid);if(error)return toast(dbMsg(error),true);INST.m=null;INST.inst=null;INST.exc=[];CO.loaded=false;toast("Saliste de la institución");if(location.hash==="#coord")location.hash="semana";else sched();}
+
+/* ---------- COORDINACIÓN ---------- */
+const CO={tab:"hoy",loaded:false,loading:false,err:"",T:{},cursos:{},ref:{},asis:[],rango:null,miembros:[],exc:[],conv:[],upd:0,f:hoy(),desde:"",hasta:hoy(),curso:"",q:"",estado:"",clase:""};
+const CLASES={observacion:"Observación general",tipo1:"Situación tipo I",tipo2:"Situación tipo II",tipo3:"Situación tipo III"};
+const REMISION=["Ninguna","Comité Escolar de Convivencia","Orientación escolar","Rectoría","ICBF / Comisaría de Familia","Policía de Infancia y Adolescencia","Sector salud","Otra"];
+async function pag(q){let out=[],from=0;for(;;){const {data,error}=await q().range(from,from+999);if(error)throw error;out=out.concat(data||[]);if(!data||data.length<1000)break;from+=1000;}return out;}
+async function loadCoord(desde,hasta,forzar){
+ if(!INST.m)return;if(CO.loading)return;
+ const necesita=forzar||!CO.loaded||!CO.rango||desde<CO.rango[0]||hasta>CO.rango[1]||(hasta>=hoy()&&Date.now()-CO.upd>60000);
+ if(!necesita)return;CO.loading=true;
+ try{const inst=INST.m.inst_id;
+  const [base,asis,mi,ex,cv]=await Promise.all([
+   pag(()=>sb.from("docs").select("user_id,col,id,data").in("col",["ests","cursos","asigs","meta"]).order("id")),
+   pag(()=>sb.from("docs").select("user_id,id,data").eq("col","asis").gte("data->>fecha",desde).lte("data->>fecha",hasta).order("id")),
+   sb.from("miembros").select("*").eq("inst_id",inst),sb.from("excusas").select("*").eq("inst_id",inst).order("desde",{ascending:false}),sb.from("convivencia").select("*").eq("inst_id",inst).order("fecha",{ascending:false})]);
+  for(const r of [mi,ex,cv])if(r.error)throw r.error;
+  CO.miembros=mi.data;CO.exc=ex.data;CO.conv=cv.data;CO.asis=asis;CO.rango=[desde,hasta];modeloCoord(base);CO.err="";CO.upd=Date.now();
+ }catch(e){CO.err=avErr(e);}
+ CO.loaded=true;CO.loading=false;if(UI.view==="coord")sched();}
+function modeloCoord(base){
+ const T={};for(const r of base){const t=T[r.user_id]||(T[r.user_id]={cursos:{},asigs:{},ests:{},meta:null});if(r.col==="meta")t.meta=r.data;else if(t[r.col])t[r.col][r.id]=r.data;}
+ const cursos={},ref={};
+ for(const [u,t] of Object.entries(T))for(const [eid,e] of Object.entries(t.ests)){if(e.activo===false)continue;const c=t.cursos[e.cursoId];if(!c)continue;const cn=norm(c.nombre);
+  const cu=cursos[cn]||(cursos[cn]={n:cn,nombre:c.nombre,est:[],byK:{},byD:{}});const k=norm((e.apellidos||"")+" "+(e.nombres||"")),d=digits(e.documento);
+  let cl=(d&&cu.byD[d])||cu.byK[k];if(!cl){cl={k,d,curso:cn,cursoNombre:c.nombre,nombre:nomEst(e),acudiente:"",telefono:"",foto:"",refs:[]};cu.est.push(cl);}
+  cu.byK[k]=cl;if(d){cu.byD[d]=cl;if(!cl.d)cl.d=d;}if(!cl.acudiente&&e.acudiente)cl.acudiente=e.acudiente;if(!cl.telefono&&e.telefono)cl.telefono=e.telefono;if(!cl.foto&&e.foto)cl.foto=e.foto;
+  cl.refs.push(u+"|"+eid);ref[u+"|"+eid]=cl;}
+ for(const cu of Object.values(cursos))cu.est.sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
+ CO.T=T;CO.cursos=cursos;CO.ref=ref;}
+const cursosCo=()=>Object.values(CO.cursos).sort((a,b)=>a.nombre.localeCompare(b.nombre,"es",{numeric:true}));
+const nomDoc=u=>(CO.miembros.find(m=>m.user_id===u)||{}).nombre||((CO.T[u]||{}).meta||{}).docente||"Docente";
+function excCo(cl,f){return CO.exc.some(x=>x.estado==="aprobada"&&x.curso===cl.curso&&f>=String(x.desde)&&f<=String(x.hasta)&&(x.est_key===cl.k||(cl.d&&x.est_doc===cl.d)));}
+function eventosCo(desde,hasta){const ev=[];
+ for(const r of CO.asis){const d=r.data||{};if(!d.fecha||d.fecha<desde||d.fecha>hasta)continue;const t=CO.T[r.user_id];if(!t)continue;
+  const cods=(t.meta&&t.meta.codigos)||_def.codigos,mks=(t.meta&&Array.isArray(t.meta.marcas)?t.meta.marcas:_def.marcas),asig=(t.asigs[d.asigId]||{}).nombre||"";
+  for(const eid of new Set([...Object.keys(d.reg||{}),...Object.keys(d.extra||{})])){const cl=CO.ref[r.user_id+"|"+eid];if(!cl)continue;const code=(d.reg||{})[eid]||"",k=cods.find(x=>x.c===code)||{};
+   let tipo=code?(k.tipo||"registro"):"";if(tipo==="falta"&&excCo(cl,d.fecha))tipo="justificada";const mx=(d.extra||{})[eid];
+   ev.push({cl,fecha:d.fecha,tipo,code,codeNombre:code?(k.nombre||code):"",marca:mx?((mks.find(m=>m.c===mx)||{}).nombre||mx):"",asig,uid:r.user_id});}}
+ return ev;}
+function porEst(ev){const m=new Map();for(const e of ev){let r=m.get(e.cl);if(!r){r={cl:e.cl,ses:0,falta:0,just:0,tarde:0,marcas:{},dias:{}};m.set(e.cl,r);}
+ if(e.code){r.ses++;if(e.tipo==="falta")r.falta++;else if(e.tipo==="justificada")r.just++;else if(e.tipo==="tarde")r.tarde++;const dd=r.dias[e.fecha]||(r.dias[e.fecha]={ses:0,falta:0,just:0});dd.ses++;if(e.tipo==="falta")dd.falta++;if(e.tipo==="justificada")dd.just++;}
+ if(e.marca)r.marcas[e.marca]=(r.marcas[e.marca]||0)+1;}
+ for(const r of m.values()){r.pct=r.ses?Math.round(100*(r.ses-r.falta-r.just)/r.ses):null;r.diasAus=Object.values(r.dias).filter(x=>x.ses&&x.falta+x.just===x.ses).length;}return m;}
+function inicioTrim(){const p=periodoDeFecha(hoy());return p&&p.inicio?p.inicio:hoy().slice(0,4)+"-01-01";}
+function vCoord(){
+ if(!INST.cargado)return `<div class="load">Cargando…</div>`;
+ if(!esCoord())return `<h2>Coordinación</h2><div class="card empty">Este módulo es solo para coordinación. ${INST.m?"":"Si eres coordinador(a), crea la institución o únete con el código de coordinación en Ajustes."}<div style="margin-top:10px"><a class="btn pri" href="#ajustes">Ir a Ajustes</a></div></div>`;
+ const tabs=[["hoy","Hoy"],["cons","Consolidado"],["alertas","Alertas"],["excusas","Excusas"],["obs","Observador"],["inst","Institución"]];
+ let rng;if(CO.tab==="hoy")rng=[CO.f,CO.f];else if(CO.tab==="cons"){if(!CO.desde)CO.desde=inicioTrim();rng=[CO.desde,CO.hasta];}else if(CO.tab==="alertas")rng=[inicioTrim(),hoy()];else rng=[hoy(),hoy()];
+ loadCoord(rng[0],rng[1]);
+ let h=`<div class="row" style="margin-bottom:8px"><h2 style="margin:0" class="sp">Coordinación</h2><span class="mut sm">${esc((INST.inst||{}).nombre||"")}</span></div>
+ <div class="tabs">${tabs.map(([k,l])=>`<button data-cot="${k}" class="${CO.tab===k?"on":""}">${l}</button>`).join("")}</div>`;
+ if(CO.err)h+=`<div class="banner e">${esc(CO.err)}</div>`;
+ if(!CO.loaded)return h+`<div class="load" style="min-height:30vh">Cargando información de la institución…</div>`;
+ const nd=new Set(CO.miembros.filter(m=>m.rol==="docente"||CO.T[m.user_id]).map(m=>m.user_id)).size;
+ if(!nd&&CO.tab!=="inst")h+=`<div class="banner i">Aún no hay docentes unidos. Compárteles el código de docentes que está en la pestaña Institución.</div>`;
+ h+={hoy:coHoy,cons:coCons,alertas:coAlertas,excusas:coExcusas,obs:coObs,inst:coInst}[CO.tab]();
+ return h;}
+function filtroCurso(){return `<select id="co_cur" style="flex:1 1 160px"><option value="">Todos los cursos</option>${cursosCo().map(c=>`<option value="${esc(c.n)}" ${c.n===CO.curso?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select>`;}
+function coHoy(){
+ const ev=eventosCo(CO.f,CO.f);const pe=porEst(ev);const cs=cursosCo().filter(c=>!CO.curso||c.n===CO.curso);
+ const conReg=new Set(ev.filter(e=>e.code).map(e=>e.cl.curso));const sinReg=cs.filter(c=>!conReg.has(c.n)).map(c=>c.nombre);
+ let tot=0;
+ let h=`<div class="row" style="margin-bottom:10px"><input type="date" id="co_f" value="${CO.f}" style="flex:0 1 170px">${filtroCurso()}<button class="btn sm" data-co="refrescar">Actualizar</button></div>
+ <div class="mut sm" style="margin-bottom:10px">Actualizado ${new Date(CO.upd).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"})}${CO.f===hoy()?" · se actualiza cada minuto":""}</div>`;
+ const bloques=cs.filter(c=>conReg.has(c.n)).map(cu=>{const lista=cu.est.map(cl=>pe.get(cl)).filter(r=>r&&(r.falta||r.just||r.tarde||Object.keys(r.marcas).length));
+  const docs=new Set(ev.filter(e=>e.cl.curso===cu.n&&e.code).map(e=>e.uid));return{cu,lista,docs};});
+ for(const b of bloques){const aus=b.lista.filter(r=>r.falta);tot+=aus.length;
+  h+=`<div class="card"><div class="row"><b class="sp">Curso ${esc(b.cu.nombre)}</b><span class="mut sm">${b.docs.size} docente(s) registraron · ${aus.length} con falta</span></div>
+  ${b.lista.length?`<div class="list">${b.lista.map(r=>{const det=ev.filter(e=>e.cl===r.cl&&(["falta","justificada","tarde"].includes(e.tipo)||e.marca)).map(e=>`${e.codeNombre&&e.tipo!=="presente"?e.codeNombre:""}${e.marca?(e.codeNombre&&e.tipo!=="presente"?" + ":"")+e.marca:""} (${e.asig})`).filter(x=>!x.startsWith(" ("));
+   const todo=r.ses&&r.falta+r.just===r.ses;const w=telWA(r.cl.telefono);
+   return `<div class="it"><span class="av s">${r.cl.foto?`<img src="${esc(r.cl.foto)}" class="av s">`:esc(r.cl.nombre.split(" ").map(x=>x[0]).slice(0,2).join(""))}</span><div class="nm"><b>${esc(r.cl.nombre)}</b><span class="mut sm">${esc(det.join(" · "))}</span><div class="row" style="gap:4px;margin-top:3px">${r.falta?`<span class="tag bad">${todo?"No asistió":"Falta en "+r.falta+" de "+r.ses+" clase(s)"}</span>`:""}${r.just?`<span class="tag ok">Con excusa</span>`:""}${r.tarde?`<span class="tag warn">Tarde</span>`:""}${Object.keys(r.marcas).map(m=>`<span class="tag mk2">${esc(m)}</span>`).join("")}</div></div>
+   <div class="row" style="gap:4px;flex-direction:column;align-items:stretch">${w&&r.falta?`<a class="btn sm wa" href="https://wa.me/${w}?text=${encodeURIComponent(msgFamCo(r))}" target="_blank" rel="noopener">WhatsApp</a>`:""}<button class="btn sm" data-co="excusa" data-k="${esc(r.cl.curso+"|"+r.cl.k)}">Excusa</button></div></div>`;}).join("")}</div>
+   ${aus.length?`<div class="row" style="margin-top:8px"><button class="btn sm pri" data-co="copiarCurso" data-k="${esc(b.cu.n)}">Copiar mensaje del curso</button></div>`:""}`:'<div class="mut sm" style="margin-top:6px">Sin novedades.</div>'}</div>`;}
+ if(!bloques.length)h+=`<div class="card empty">Ningún docente ha registrado asistencia ${CO.f===hoy()?"hoy":"en esta fecha"}${CO.curso?" para este curso":""}.</div>`;
+ if(sinReg.length)h+=`<div class="mut sm">Sin registro de asistencia en la fecha: ${sinReg.map(esc).join(", ")}.</div>`;
+ CO._hoy={bloques,ev};
+ return h;}
+function msgFamCo(r){const c=cfg();return llenar(c.msgFamilia||MSG_F,{institucion:(INST.inst||{}).nombre||c.institucion||"",fecha:fFecha(CO.f),curso:r.cl.cursoNombre,docente:"Coordinación",estudiante:r.cl.nombre,acudiente:r.cl.acudiente||"acudiente",detalle:r.ses&&r.falta===r.ses?"no asistió a clase":`faltó a ${r.falta} de ${r.ses} clase(s)`});}
+function msgCursoCo(cn){const b=(CO._hoy.bloques||[]).find(x=>x.cu.n===cn);if(!b)return"";const c=cfg();const aus=b.lista.filter(r=>r.falta);
+ return llenar(c.msgGrupo||MSG_G,{institucion:(INST.inst||{}).nombre||"",fecha:fFecha(CO.f),curso:b.cu.nombre,docente:"Coordinación",titulo:"no asistieron a clase",lista:aus.map((r,i)=>`${i+1}. ${r.cl.nombre}${r.ses&&r.falta<r.ses?` (faltó a ${r.falta} de ${r.ses} clases)`:""}`).join("\n")});}
+function coCons(){
+ const ev=eventosCo(CO.desde,CO.hasta);const pe=porEst(ev);const cs=cursosCo().filter(c=>!CO.curso||c.n===CO.curso);
+ const marcas=[...new Set(ev.filter(e=>e.marca).map(e=>e.marca))];
+ const pers=cfg().periodos.filter(p=>p.inicio&&p.fin);
+ let h=`<div class="row" style="margin-bottom:6px"><label class="f" style="margin:0;flex:1 1 130px">Desde<input type="date" id="co_d" value="${CO.desde}"></label><label class="f" style="margin:0;flex:1 1 130px">Hasta<input type="date" id="co_h" value="${CO.hasta}"></label></div>
+ <div class="row" style="margin-bottom:10px">${filtroCurso()}<button class="btn sm" data-co="rmes">Este mes</button><button class="btn sm" data-co="rano">Año a la fecha</button>${pers.map(p=>`<button class="btn sm" data-co="rper" data-a="${p.inicio}" data-b="${p.fin}">${esc(p.nombre)}</button>`).join("")}</div>
+ ${pers.length?"":`<div class="mut sm" style="margin-bottom:8px">Para ver botones por trimestre, registra las fechas de los periodos en Ajustes → Periodos académicos.</div>`}`;
+ for(const cu of cs){const filas=cu.est.map(cl=>pe.get(cl)||{cl,ses:0,falta:0,just:0,tarde:0,marcas:{},pct:null,diasAus:0});if(!filas.some(r=>r.ses))continue;
+  const ps=filas.filter(r=>r.pct!=null);const prom=ps.length?Math.round(ps.reduce((s,r)=>s+r.pct,0)/ps.length):null;
+  h+=`<div class="card"><div class="row" style="margin-bottom:6px"><b class="sp">Curso ${esc(cu.nombre)}</b><span class="mut sm">asistencia ${prom==null?"—":prom+"%"} · ${filas.reduce((s,r)=>s+r.falta,0)} fallas</span></div><div class="tw"><table class="g"><thead><tr><th class="st">Estudiante</th><th>Clases</th><th>Fallas</th><th>Justif.</th><th>Tardes</th><th>% asist.</th><th>Días sin asistir</th>${marcas.map(m=>`<th>${esc(m)}</th>`).join("")}</tr></thead><tbody>${filas.map(r=>`<tr><td class="st">${esc(r.cl.nombre)}</td><td>${r.ses}</td><td>${r.falta}</td><td>${r.just}</td><td>${r.tarde}</td><td>${r.pct==null?"—":r.pct+"%"}</td><td>${r.diasAus}</td>${marcas.map(m=>`<td>${r.marcas[m]||0}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>`;}
+ if(!ev.length)h+=`<div class="card empty">No hay asistencia registrada en este rango.</div>`;
+ else h+=`<div class="row"><button class="btn pri" data-co="csvCons">Descargar CSV</button></div>`;
+ CO._cons={pe,cs,marcas};return h;}
+function calcAlertas(){const P=(INST.inst||{}).params||{};const lim=+P.limite||25,ale=+P.alerta||15,con=+P.consecutivos||3;const ev=eventosCo(inicioTrim(),hoy());const pe=porEst(ev);const out=[];
+ for(const r of pe.values()){if(!r.ses)continue;const pf=100*r.falta/r.ses;const fechas=Object.keys(r.dias).sort();let racha=0;for(let i=fechas.length-1;i>=0;i--){const x=r.dias[fechas[i]];if(x.ses&&x.falta===x.ses)racha++;else break;}
+  const nivel=r.ses>=5&&pf>=lim?"crit":r.ses>=5&&pf>=ale?"aten":racha>=con?"racha":"";if(nivel)out.push({r,pf,racha,nivel});}
+ const ord={crit:0,aten:1,racha:2};return{out:out.sort((a,b)=>ord[a.nivel]-ord[b.nivel]||b.pf-a.pf),lim,ale,con};}
+function coAlertas(){const {out,lim,ale,con}=calcAlertas();
+ let h=`<div class="banner i sm">Desde ${fFecha(inicioTrim())} hasta hoy, con base en las fallas sin excusa sobre las clases registradas. Crítico: ${lim}% o más (límite del SIEE). Atención: ${ale}% o más. Los porcentajes se evalúan desde 5 clases registradas. También se alerta a quien lleva ${con} o más días seguidos sin asistir. <button class="lnk sm" data-co="params">Cambiar parámetros</button></div>`;
+ if(!out.length)return h+`<div class="card empty">No hay estudiantes en alerta.</div>`;
+ return h+`<div class="card"><div class="list">${out.map(a=>`<div class="it"><div class="nm"><b>${esc(a.r.cl.nombre)}</b><span class="mut sm">Curso ${esc(a.r.cl.cursoNombre)} · ${a.r.falta} falta(s) sin excusa de ${a.r.ses} clases (${Math.round(a.pf)}%)${a.racha?` · ${a.racha} día(s) seguidos sin asistir`:""}</span><div style="margin-top:3px"><span class="tag ${a.nivel==="crit"?"bad":"warn"}">${a.nivel==="crit"?"Crítico":a.nivel==="aten"?"Atención":"Ausencia continua"}</span></div></div>
+  <div class="row" style="gap:4px;flex-direction:column;align-items:stretch"><button class="btn sm" data-co="excusa" data-k="${esc(a.r.cl.curso+"|"+a.r.cl.k)}">Excusa</button><button class="btn sm" data-co="anotar" data-k="${esc(a.r.cl.curso+"|"+a.r.cl.k)}">Observador</button></div></div>`).join("")}</div></div>`;}
+function clDe(key){const [cn,k]=String(key||"").split("|");const cu=CO.cursos[cn];return cu?cu.est.find(c=>c.k===k)||null:null;}
+function coExcusas(){let ex=CO.exc.filter(x=>(!CO.curso||x.curso===CO.curso)&&(!CO.estado||x.estado===CO.estado));
+ const cn=c=>(CO.cursos[c]||{}).nombre||c;
+ return `<div class="row" style="margin-bottom:10px">${filtroCurso()}<select id="co_est" style="flex:0 1 150px"><option value="">Todos los estados</option>${["pendiente","aprobada","rechazada"].map(s=>`<option value="${s}" ${CO.estado===s?"selected":""}>${s[0].toUpperCase()+s.slice(1)}</option>`).join("")}</select><button class="btn pri" data-co="excusa">+ Registrar excusa</button></div>
+ <div class="mut sm" style="margin-bottom:8px">Al aprobar una excusa, las faltas de esas fechas cuentan como justificadas en todas las asignaturas del estudiante. Los docentes no ven el motivo.</div>
+ ${ex.length?`<div class="card"><div class="list">${ex.map(x=>`<div class="it"><div class="nm"><b>${esc(x.est_nombre)}</b><span class="mut sm">Curso ${esc(cn(x.curso))} · ${fFecha(x.desde)}${x.hasta!==x.desde?" a "+fFecha(x.hasta):""}${x.motivo?" · "+esc(x.motivo):""}</span>${x.soporte?`<div class="files"><a href="${esc(x.soporte)}" target="_blank" rel="noopener">Soporte</a></div>`:""}<div style="margin-top:3px"><span class="tag ${x.estado==="aprobada"?"ok":x.estado==="rechazada"?"bad":"warn"}">${esc(x.estado)}</span></div></div>
+  <div class="row" style="gap:4px;flex-direction:column;align-items:stretch">${x.estado!=="aprobada"?`<button class="btn sm pri" data-co="aprobar" data-id="${x.id}">Aprobar</button>`:""}${x.estado==="pendiente"?`<button class="btn sm" data-co="rechazar" data-id="${x.id}">Rechazar</button>`:""}<button class="btn sm" data-co="editExc" data-id="${x.id}">Editar</button></div></div>`).join("")}</div></div>`:`<div class="card empty">No hay excusas registradas.</div>`}`;}
+function pickerHTML(p,key){const [cn,k]=String(key||"").split("|");const cs=cursosCo();const cur=CO.cursos[cn]?cn:(cs[0]||{}).n||"";
+ return `<div class="f2"><label class="f">Curso<select id="${p}_cur">${cs.map(c=>`<option value="${esc(c.n)}" ${c.n===cur?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select></label><label class="f">Estudiante<select id="${p}_alu">${optsEst(cur,k)}</select></label></div>`;}
+function optsEst(cn,k){const cu=CO.cursos[cn];return cu?cu.est.map(c=>`<option value="${esc(c.k)}" ${c.k===k?"selected":""}>${esc(c.nombre)}</option>`).join(""):"";}
+function montarPicker(sh,p){const c=$("#"+p+"_cur",sh);if(c)c.onchange=()=>{$("#"+p+"_alu",sh).innerHTML=optsEst(c.value,"");};}
+function leerPicker(p){const cn=$("#"+p+"_cur").value,k=$("#"+p+"_alu").value;const cl=clDe(cn+"|"+k);return cl?{curso:cn,curso_nombre:cl.cursoNombre,est_key:cl.k,est_doc:cl.d||"",est_nombre:cl.nombre}:null;}
+function formExcusa(x,key){if(!cursosCo().length)return toast("Aún no hay cursos de docentes unidos.",true);const nuevo=!x;x=x||{desde:CO.tab==="hoy"?CO.f:hoy(),hasta:CO.tab==="hoy"?CO.f:hoy(),estado:"aprobada",motivo:"",soporte:""};
+ openModal(`<div class="hd"><h3>${nuevo?"Registrar excusa":"Editar excusa"}</h3><button class="x" data-close>×</button></div>${pickerHTML("ex",x.curso?x.curso+"|"+x.est_key:key)}
+ <div class="f2"><label class="f">Desde<input type="date" id="ex_d" value="${esc(x.desde)}"></label><label class="f">Hasta<input type="date" id="ex_h" value="${esc(x.hasta)}"></label></div>
+ <label class="f">Motivo<input type="text" id="ex_m" value="${esc(x.motivo)}" placeholder="Ej.: cita médica"></label><label class="f">Enlace al soporte (opcional)<input type="url" id="ex_s" value="${esc(x.soporte)}" placeholder="https://drive.google.com/…"></label>
+ <label class="f">Estado<select id="ex_e">${["pendiente","aprobada","rechazada"].map(s=>`<option value="${s}" ${x.estado===s?"selected":""}>${s[0].toUpperCase()+s.slice(1)}</option>`).join("")}</select></label>
+ <div class="ft">${nuevo?"":`<button class="btn dan" id="ex_del">Eliminar</button><span class="sp"></span>`}<button class="btn pri" id="ex_ok">Guardar</button></div>`,sh=>{montarPicker(sh,"ex");
+  $("#ex_ok",sh).onclick=async()=>{const est=leerPicker("ex");if(!est)return toast("Elige el estudiante.",true);const d=$("#ex_d").value,hh=$("#ex_h").value||d;if(!d||hh<d)return toast("Revisa las fechas.",true);
+   const {curso_nombre,...e2}=est;const row={...e2,desde:d,hasta:hh,motivo:$("#ex_m").value.trim(),soporte:$("#ex_s").value.trim(),estado:$("#ex_e").value,updated_at:new Date().toISOString()};
+   const {error}=nuevo?await sb.from("excusas").insert({...row,inst_id:INST.m.inst_id}):await sb.from("excusas").update(row).eq("id",x.id);if(error)return toast(avErr(error),true);closeModal();toast("Excusa guardada");await loadCoord(CO.rango[0],CO.rango[1],true);};
+  if($("#ex_del",sh))$("#ex_del",sh).onclick=async()=>{if(!await ask("¿Eliminar esta excusa? Las faltas volverán a contar sin justificar.","Eliminar",true))return;const {error}=await sb.from("excusas").delete().eq("id",x.id);if(error)return toast(avErr(error),true);closeModal();await loadCoord(CO.rango[0],CO.rango[1],true);};});}
+function coObs(){const q=norm(CO.q);let L=CO.conv.filter(x=>(!CO.curso||x.curso===CO.curso)&&(!CO.clase||x.clase===CO.clase)&&(!CO.estado||x.estado===CO.estado)&&(!q||norm(x.est_nombre).includes(q)));
+ return `<div class="row" style="margin-bottom:8px">${filtroCurso()}<select id="co_cla" style="flex:0 1 170px"><option value="">Todos los tipos</option>${Object.entries(CLASES).map(([k,l])=>`<option value="${k}" ${CO.clase===k?"selected":""}>${l}</option>`).join("")}</select><select id="co_est" style="flex:0 1 130px"><option value="">Todos</option><option value="abierto" ${CO.estado==="abierto"?"selected":""}>Abiertos</option><option value="cerrado" ${CO.estado==="cerrado"?"selected":""}>Cerrados</option></select></div>
+ <div class="row" style="margin-bottom:10px"><input type="search" id="co_q" placeholder="Buscar estudiante" value="${esc(CO.q)}" style="flex:1 1 160px"><button class="btn pri" data-co="anotar">+ Nueva anotación</button>${L.length?`<button class="btn sm" data-co="csvObs">CSV</button>`:""}</div>
+ <div class="mut sm" style="margin-bottom:8px">Registro del observador y de situaciones de convivencia (Ley 1620 de 2013 y Decreto 1965 de 2013). Solo lo ve la coordinación.</div>
+ ${L.length?L.map(x=>`<div class="card"><div class="row"><div class="sp"><b>${esc(x.est_nombre)}</b><div class="mut sm">Curso ${esc(x.curso_nombre||x.curso)} · ${fFecha(x.fecha)}</div></div><span class="tag ${x.clase==="tipo3"?"bad":x.clase==="tipo2"?"warn":x.clase==="tipo1"?"mk2":""}">${esc(CLASES[x.clase])}</span><span class="tag ${x.estado==="abierto"?"warn":"ok"}">${x.estado==="abierto"?"Abierto":"Cerrado"}</span></div>
+  <div class="sm" style="margin-top:6px">${textoHTML(x.descripcion)}</div>${x.acciones?`<div class="sm" style="margin-top:4px"><b>Acciones:</b> ${textoHTML(x.acciones)}</div>`:""}${x.compromisos?`<div class="sm" style="margin-top:4px"><b>Compromisos:</b> ${textoHTML(x.compromisos)}</div>`:""}${x.remision&&x.remision!=="Ninguna"?`<div class="sm" style="margin-top:4px"><b>Remisión:</b> ${esc(x.remision)}</div>`:""}${x.seguimiento?`<div class="sm" style="margin-top:4px"><b>Seguimiento:</b> ${textoHTML(x.seguimiento)}</div>`:""}
+  <div class="row" style="margin-top:8px"><button class="btn sm" data-co="editObs" data-id="${x.id}">Editar o hacer seguimiento</button><button class="btn sm" data-co="histObs" data-k="${esc(x.curso+"|"+x.est_key)}">Historial del estudiante</button></div></div>`).join(""):`<div class="card empty">No hay anotaciones${CO.q||CO.curso||CO.clase||CO.estado?" con estos filtros":""}.</div>`}`;}
+function formObs(x,key){if(!cursosCo().length)return toast("Aún no hay cursos de docentes unidos.",true);const nuevo=!x;x=x||{fecha:hoy(),clase:"observacion",estado:"abierto",descripcion:"",acciones:"",compromisos:"",remision:"Ninguna",seguimiento:""};
+ openModal(`<div class="hd"><h3>${nuevo?"Nueva anotación":"Editar anotación"}</h3><button class="x" data-close>×</button></div>${pickerHTML("ob",x.curso?x.curso+"|"+x.est_key:key)}
+ <div class="f2"><label class="f">Fecha<input type="date" id="ob_f" value="${esc(x.fecha)}"></label><label class="f">Tipo<select id="ob_t">${Object.entries(CLASES).map(([k,l])=>`<option value="${k}" ${x.clase===k?"selected":""}>${l}</option>`).join("")}</select></label></div>
+ <div class="mut sm" id="ob_ay" style="margin:-4px 0 8px"></div>
+ <label class="f">Descripción de los hechos<textarea id="ob_d" style="min-height:90px">${esc(x.descripcion)}</textarea></label>
+ <label class="f">Acciones realizadas o ruta de atención<textarea id="ob_a">${esc(x.acciones)}</textarea></label>
+ <label class="f">Compromisos<textarea id="ob_c">${esc(x.compromisos)}</textarea></label>
+ <div class="f2"><label class="f">Remisión<select id="ob_r">${REMISION.map(r=>`<option ${x.remision===r?"selected":""}>${r}</option>`).join("")}</select></label><label class="f">Estado<select id="ob_e"><option value="abierto" ${x.estado==="abierto"?"selected":""}>Abierto</option><option value="cerrado" ${x.estado==="cerrado"?"selected":""}>Cerrado</option></select></label></div>
+ <label class="f">Seguimiento<textarea id="ob_s" placeholder="Fecha y resultado de cada seguimiento">${esc(x.seguimiento)}</textarea></label>
+ <div class="ft">${nuevo?"":`<button class="btn dan" id="ob_del">Eliminar</button><span class="sp"></span>`}<button class="btn pri" id="ob_ok">Guardar</button></div>`,sh=>{montarPicker(sh,"ob");
+  const AY={observacion:"Anotación general del observador (positiva o por atender).",tipo1:"Tipo I: conflictos manejados inadecuadamente y situaciones esporádicas que no generan daños al cuerpo o a la salud.",tipo2:"Tipo II: agresión escolar, acoso o ciberacoso repetido o sistemático, o que cause daños al cuerpo o a la salud sin incapacidad. Requiere informar a las familias y al Comité Escolar de Convivencia.",tipo3:"Tipo III: agresiones constitutivas de presuntos delitos. Requiere remisión inmediata a la autoridad competente."};
+  const ay=()=>{$("#ob_ay").textContent=AY[$("#ob_t").value];};$("#ob_t",sh).onchange=ay;ay();
+  $("#ob_ok",sh).onclick=async()=>{const est=leerPicker("ob");if(!est)return toast("Elige el estudiante.",true);const d=$("#ob_d").value.trim();if(!d)return toast("Describe la situación.",true);
+   const row={...est,fecha:$("#ob_f").value||hoy(),clase:$("#ob_t").value,descripcion:d,acciones:$("#ob_a").value.trim(),compromisos:$("#ob_c").value.trim(),remision:$("#ob_r").value,estado:$("#ob_e").value,seguimiento:$("#ob_s").value.trim(),updated_at:new Date().toISOString()};
+   const {error}=nuevo?await sb.from("convivencia").insert({...row,inst_id:INST.m.inst_id}):await sb.from("convivencia").update(row).eq("id",x.id);if(error)return toast(avErr(error),true);closeModal();toast("Anotación guardada");await loadCoord(CO.rango[0],CO.rango[1],true);};
+  if($("#ob_del",sh))$("#ob_del",sh).onclick=async()=>{if(!await ask("¿Eliminar esta anotación del observador? No se puede deshacer.","Eliminar",true))return;const {error}=await sb.from("convivencia").delete().eq("id",x.id);if(error)return toast(avErr(error),true);closeModal();await loadCoord(CO.rango[0],CO.rango[1],true);};});}
+function histObs(key){const [cn,k]=key.split("|");const L=CO.conv.filter(x=>x.curso===cn&&x.est_key===k).sort((a,b)=>a.fecha.localeCompare(b.fecha));const cl=clDe(key);
+ const ex=CO.exc.filter(x=>x.curso===cn&&x.est_key===k);
+ openModal(`<div class="hd"><h3>${esc(cl?cl.nombre:(L[0]||{}).est_nombre||"")}</h3><button class="x" data-close>×</button></div><div class="mut sm" style="margin-bottom:10px">Curso ${esc(cl?cl.cursoNombre:cn)}${cl&&cl.acudiente?" · Acudiente: "+esc(cl.acudiente):""}${cl&&cl.telefono?" · "+esc(cl.telefono):""}</div>
+ <h3>Observador</h3>${L.length?L.map(x=>`<div class="pub"><b>${fFecha(x.fecha)} · ${esc(CLASES[x.clase])}</b> <span class="tag ${x.estado==="abierto"?"warn":"ok"}">${x.estado}</span><div class="sm">${textoHTML(x.descripcion)}</div>${x.seguimiento?`<div class="sm mut">Seguimiento: ${textoHTML(x.seguimiento)}</div>`:""}</div>`).join(""):'<div class="mut sm">Sin anotaciones.</div>'}
+ <h3 style="margin-top:12px">Excusas</h3>${ex.length?ex.map(x=>`<div class="sm">${fFecha(x.desde)}${x.hasta!==x.desde?" a "+fFecha(x.hasta):""} · ${esc(x.motivo||"")} · ${esc(x.estado)}</div>`).join(""):'<div class="mut sm">Sin excusas.</div>'}
+ <div class="ft"><button class="btn pri" id="ho_n">Nueva anotación</button></div>`,sh=>{$("#ho_n",sh).onclick=()=>formObs(null,key);});}
+function coInst(){const i=INST.inst||{};const P=i.params||{};const url=appURL();
+ const ms=CO.miembros.slice().sort((a,b)=>(a.rol>b.rol?1:-1)||String(a.nombre).localeCompare(String(b.nombre)));
+ return `<div class="card"><h3>${esc(i.nombre||"")}</h3>
+ <div style="padding:6px 0"><b class="sm">Código para docentes</b><div class="mut sm">Cada docente lo escribe en Ajustes → Institución.</div><div class="row" style="margin-top:6px"><span class="code">${esc(i.codigo_docentes||"")}</span><button class="btn sm" data-co="copInv" data-t="d">Copiar invitación</button></div></div>
+ <div style="padding:6px 0"><b class="sm">Código de coordinación</b><div class="mut sm">Solo para otras personas de coordinación: da acceso a excusas y observador.</div><div class="row" style="margin-top:6px"><span class="code">${esc(i.codigo_coord||"")}</span><button class="btn sm" data-co="copInv" data-t="c">Copiar</button></div></div>
+ <div class="row" style="margin-top:6px"><button class="btn sm" data-co="regen">Cambiar códigos</button><button class="btn sm" data-co="params">Parámetros de alertas</button></div>
+ <div class="mut sm" style="margin-top:6px">Alertas: crítico ${esc(P.limite||25)}% · atención ${esc(P.alerta||15)}% · ${esc(P.consecutivos||3)} días seguidos.</div></div>
+ <div class="card"><h3>Miembros (${ms.length})</h3><div class="list">${ms.map(m=>`<div class="it"><div class="nm"><b>${esc(m.nombre||m.email||"Sin nombre")}</b><span class="mut sm">${m.rol==="coordinador"?"Coordinación":"Docente"}${m.email?" · "+esc(m.email):""} · desde ${fLoc(m.created_at)}</span></div>${m.user_id!==uid?`<button class="btn sm dan" data-co="quitarM" data-id="${m.user_id}">Quitar</button>`:'<span class="tag">Tú</span>'}</div>`).join("")}</div></div>
+ <div class="mut sm">Los estudiantes de un mismo curso registrados por distintos docentes se reconocen por el nombre del curso y el nombre completo (o el documento, si está registrado). Pide a los docentes que usen el mismo nombre de curso (por ejemplo, 1002) y la misma lista de estudiantes.</div>`;}
+async function accionCo(op,el){
+ const r=CO.rango||[hoy(),hoy()];
+ switch(op){
+  case"refrescar":return loadCoord(r[0],r[1],true);
+  case"rmes":CO.desde=hoy().slice(0,8)+"01";CO.hasta=hoy();return renderMain();
+  case"rano":CO.desde=hoy().slice(0,4)+"-01-01";CO.hasta=hoy();return renderMain();
+  case"rper":CO.desde=el.dataset.a;CO.hasta=el.dataset.b;return renderMain();
+  case"copiarCurso":return copiar(msgCursoCo(el.dataset.k));
+  case"excusa":return formExcusa(null,el.dataset.k);
+  case"editExc":return formExcusa(CO.exc.find(x=>x.id===el.dataset.id));
+  case"aprobar":case"rechazar":{const {error}=await sb.from("excusas").update({estado:op==="aprobar"?"aprobada":"rechazada",updated_at:new Date().toISOString()}).eq("id",el.dataset.id);if(error)return toast(avErr(error),true);toast(op==="aprobar"?"Excusa aprobada":"Excusa rechazada");return loadCoord(r[0],r[1],true);}
+  case"anotar":return formObs(null,el.dataset.k);
+  case"editObs":return formObs(CO.conv.find(x=>x.id===el.dataset.id));
+  case"histObs":return histObs(el.dataset.k);
+  case"csvCons":{const {pe,cs,marcas}=CO._cons;const rows=[["Curso","Estudiante","Clases","Fallas","Justificadas","Tardes","% asistencia","Días sin asistir",...marcas]];
+   for(const cu of cs)for(const cl of cu.est){const x=pe.get(cl);if(!x)continue;rows.push([cu.nombre,cl.nombre,x.ses,x.falta,x.just,x.tarde,x.pct==null?"":x.pct,x.diasAus,...marcas.map(m=>x.marcas[m]||0)]);}
+   return bajar(`Consolidado_institucional_${CO.desde}_${CO.hasta}.csv`,csv(rows));}
+  case"csvObs":{const rows=[["Fecha","Curso","Estudiante","Tipo","Estado","Descripción","Acciones","Compromisos","Remisión","Seguimiento"]];for(const x of CO.conv)rows.push([x.fecha,x.curso_nombre||x.curso,x.est_nombre,CLASES[x.clase],x.estado,x.descripcion,x.acciones,x.compromisos,x.remision,x.seguimiento]);return bajar(`Observador_${hoy()}.csv`,csv(rows));}
+  case"copInv":{const i=INST.inst||{};return copiar(el.dataset.t==="d"?`Únete a ${i.nombre} en Aula Docente para que coordinación pueda consultar la asistencia de tus clases:\n1. Abre ${appURL()} e ingresa con tu cuenta.\n2. Ve a Ajustes → Institución.\n3. Escribe el código ${i.codigo_docentes}.`:i.codigo_coord);}
+  case"regen":{if(!await ask("Se generarán códigos nuevos. Los miembros actuales siguen dentro; los códigos anteriores dejan de servir. ¿Continuar?","Cambiar"))return;const nc=()=>nuevoCod();const {error}=await sb.from("instituciones").update({codigo_docentes:nc(),codigo_coord:nc()}).eq("id",INST.m.inst_id);if(error)return toast(avErr(error),true);await loadInst();return renderMain();}
+  case"params":{const P=(INST.inst||{}).params||{};openModal(`<div class="hd"><h3>Parámetros de alertas</h3><button class="x" data-close>×</button></div><p class="sm mut">Según el SIEE de la institución. Los porcentajes se calculan sobre las clases registradas en el periodo.</p>
+   <div class="f2"><label class="f">Límite de inasistencia (crítico) %<input type="number" id="pa_l" value="${esc(P.limite||25)}"></label><label class="f">Alerta preventiva %<input type="number" id="pa_a" value="${esc(P.alerta||15)}"></label><label class="f">Días seguidos sin asistir<input type="number" id="pa_c" value="${esc(P.consecutivos||3)}"></label></div><div class="ft"><button class="btn pri" id="pa_ok">Guardar</button></div>`,sh=>{$("#pa_ok",sh).onclick=async()=>{const p={limite:+$("#pa_l").value||25,alerta:+$("#pa_a").value||15,consecutivos:+$("#pa_c").value||3};if(p.alerta>=p.limite)return toast("La alerta preventiva debe ser menor que el límite.",true);const {error}=await sb.from("instituciones").update({params:p}).eq("id",INST.m.inst_id);if(error)return toast(avErr(error),true);closeModal();await loadInst();renderMain();};});return;}
+  case"quitarM":{const m=CO.miembros.find(x=>x.user_id===el.dataset.id);if(!await ask(`¿Quitar a ${m.nombre||m.email} de la institución? Coordinación dejará de ver su asistencia.`,"Quitar",true))return;const {error}=await sb.from("miembros").delete().eq("inst_id",INST.m.inst_id).eq("user_id",m.user_id);if(error)return toast(avErr(error),true);return loadCoord(r[0],r[1],true);}
+ }}
+setInterval(()=>{if(UI.view==="coord"&&CO.tab==="hoy"&&CO.f===hoy()&&document.visibilityState==="visible"&&!editing()&&$("#modal").classList.contains("hidden"))loadCoord(CO.f,CO.f,true);},60000);
 /* ---------- PORTAL DEL ESTUDIANTE ---------- */
 const PT={mats:[],pubs:[],err:"",loading:false,filtro:"",unirse:false,join:null,joinErr:"",q:""};let joinPend=null;
 async function loadPortal(){if(PT.loading)return;PT.loading=true;$("#main").innerHTML=`<div class="load">Cargando tus clases…</div>`;

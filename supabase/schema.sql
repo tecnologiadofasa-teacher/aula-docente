@@ -214,3 +214,151 @@ create policy "materiales_leer" on storage.objects for select to authenticated
     (storage.foldername(name))[1] = (select auth.uid())::text
     or exists (select 1 from public.publicaciones p where p.id::text = (storage.foldername(name))[2])
   ));
+
+------------------------------------------------------------------
+-- 8. Institución y coordinación
+--    La coordinación solo puede LEER estudiantes, cursos, nombres de
+--    asignaturas y asistencia de los docentes de su institución.
+--    Nunca calificaciones, actividades ni evidencias.
+------------------------------------------------------------------
+create or replace function public.gen_codigo() returns text language sql volatile as $$
+  select string_agg(substr('ABCDEFGHJKMNPQRSTUVWXYZ23456789', 1 + floor(random() * 31)::int, 1), '')
+  from generate_series(1, 7)
+$$;
+
+create table if not exists public.instituciones (
+  id              uuid primary key default gen_random_uuid(),
+  nombre          text not null,
+  codigo_docentes text not null unique default public.gen_codigo(),
+  codigo_coord    text not null unique default public.gen_codigo(),
+  params          jsonb not null default '{"limite":25,"alerta":15,"consecutivos":3}'::jsonb,
+  creada_por      uuid references auth.users (id) on delete set null,
+  created_at      timestamptz not null default now()
+);
+create table if not exists public.miembros (
+  inst_id    uuid not null references public.instituciones (id) on delete cascade,
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  rol        text not null check (rol in ('coordinador', 'docente')),
+  nombre     text not null default '',
+  email      text not null default '',
+  created_at timestamptz not null default now(),
+  primary key (inst_id, user_id)
+);
+create unique index if not exists miembros_una_inst on public.miembros (user_id);
+
+create or replace function public.es_coord_de(p_inst uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from miembros where inst_id = p_inst and user_id = auth.uid() and rol = 'coordinador')
+$$;
+create or replace function public.coord_ve_docente(p_user uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from miembros c join miembros d on d.inst_id = c.inst_id
+                 where c.user_id = auth.uid() and c.rol = 'coordinador' and d.user_id = p_user)
+$$;
+create or replace function public.mi_institucion() returns uuid
+language sql stable security definer set search_path = public as $$
+  select inst_id from miembros where user_id = auth.uid() limit 1
+$$;
+
+alter table public.instituciones enable row level security;
+alter table public.miembros enable row level security;
+drop policy if exists "inst_leer" on public.instituciones;
+drop policy if exists "inst_editar" on public.instituciones;
+create policy "inst_leer" on public.instituciones for select to authenticated using (id = public.mi_institucion());
+create policy "inst_editar" on public.instituciones for update to authenticated using (public.es_coord_de(id)) with check (public.es_coord_de(id));
+drop policy if exists "miembros_leer" on public.miembros;
+drop policy if exists "miembros_borrar" on public.miembros;
+create policy "miembros_leer" on public.miembros for select to authenticated using (user_id = (select auth.uid()) or public.es_coord_de(inst_id));
+create policy "miembros_borrar" on public.miembros for delete to authenticated using (user_id = (select auth.uid()) or public.es_coord_de(inst_id));
+
+-- Lectura de asistencia de los docentes de la institución (solo estas colecciones).
+drop policy if exists "docs_coordinacion" on public.docs;
+create policy "docs_coordinacion" on public.docs for select to authenticated
+  using (col in ('asis', 'ests', 'cursos', 'asigs', 'meta') and public.es_docente() and public.coord_ve_docente(user_id));
+
+create or replace function public.crear_institucion(p_nombre text, p_minombre text, p_email text)
+returns json language plpgsql security definer set search_path = public as $$
+declare v uuid;
+begin
+  if auth.uid() is null or not public.es_docente() then return json_build_object('ok', false, 'error', 'sesion'); end if;
+  if exists (select 1 from miembros where user_id = auth.uid()) then return json_build_object('ok', false, 'error', 'ya_miembro'); end if;
+  if length(trim(coalesce(p_nombre, ''))) < 3 then return json_build_object('ok', false, 'error', 'nombre'); end if;
+  insert into instituciones (nombre, creada_por) values (trim(p_nombre), auth.uid()) returning id into v;
+  insert into miembros (inst_id, user_id, rol, nombre, email) values (v, auth.uid(), 'coordinador', coalesce(p_minombre, ''), coalesce(p_email, ''));
+  return json_build_object('ok', true, 'id', v);
+end $$;
+
+create or replace function public.unirse_institucion(p_codigo text, p_nombre text, p_email text)
+returns json language plpgsql security definer set search_path = public as $$
+declare i record; v_rol text;
+begin
+  if auth.uid() is null or not public.es_docente() then return json_build_object('ok', false, 'error', 'sesion'); end if;
+  if exists (select 1 from miembros where user_id = auth.uid()) then return json_build_object('ok', false, 'error', 'ya_miembro'); end if;
+  select * into i from instituciones where codigo_docentes = upper(trim(p_codigo)) or codigo_coord = upper(trim(p_codigo));
+  if not found then return json_build_object('ok', false, 'error', 'codigo'); end if;
+  v_rol := case when i.codigo_coord = upper(trim(p_codigo)) then 'coordinador' else 'docente' end;
+  insert into miembros (inst_id, user_id, rol, nombre, email) values (i.id, auth.uid(), v_rol, coalesce(p_nombre, ''), coalesce(p_email, ''));
+  return json_build_object('ok', true, 'nombre', i.nombre, 'rol', v_rol);
+end $$;
+
+create table if not exists public.excusas (
+  id             uuid primary key default gen_random_uuid(),
+  inst_id        uuid not null references public.instituciones (id) on delete cascade,
+  curso          text not null,             -- nombre del curso normalizado
+  est_key        text not null,             -- nombre del estudiante normalizado
+  est_doc        text not null default '',
+  est_nombre     text not null default '',
+  desde          date not null,
+  hasta          date not null,
+  motivo         text not null default '',
+  soporte        text not null default '',
+  estado         text not null default 'pendiente' check (estado in ('pendiente', 'aprobada', 'rechazada')),
+  registrada_por uuid default auth.uid(),
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now(),
+  check (hasta >= desde)
+);
+create table if not exists public.convivencia (
+  id             uuid primary key default gen_random_uuid(),
+  inst_id        uuid not null references public.instituciones (id) on delete cascade,
+  curso          text not null,
+  curso_nombre   text not null default '',
+  est_key        text not null,
+  est_doc        text not null default '',
+  est_nombre     text not null default '',
+  fecha          date not null,
+  clase          text not null check (clase in ('observacion', 'tipo1', 'tipo2', 'tipo3')),
+  descripcion    text not null default '',
+  acciones       text not null default '',
+  compromisos    text not null default '',
+  remision       text not null default '',
+  seguimiento    text not null default '',
+  estado         text not null default 'abierto' check (estado in ('abierto', 'cerrado')),
+  registrada_por uuid default auth.uid(),
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+create index if not exists excusas_inst on public.excusas (inst_id, desde);
+create index if not exists convivencia_inst on public.convivencia (inst_id, fecha desc);
+alter table public.excusas enable row level security;
+alter table public.convivencia enable row level security;
+drop policy if exists "excusas_coord" on public.excusas;
+drop policy if exists "convivencia_coord" on public.convivencia;
+create policy "excusas_coord" on public.excusas for all to authenticated using (public.es_coord_de(inst_id)) with check (public.es_coord_de(inst_id));
+create policy "convivencia_coord" on public.convivencia for all to authenticated using (public.es_coord_de(inst_id)) with check (public.es_coord_de(inst_id));
+
+-- Los docentes solo reciben las fechas de las excusas aprobadas (no el motivo).
+create or replace function public.excusas_aprobadas()
+returns table (curso text, est_key text, est_doc text, desde date, hasta date)
+language sql stable security definer set search_path = public as $$
+  select e.curso, e.est_key, e.est_doc, e.desde, e.hasta
+  from excusas e join miembros m on m.inst_id = e.inst_id and m.user_id = auth.uid()
+  where e.estado = 'aprobada'
+$$;
+
+revoke all on function public.crear_institucion(text, text, text), public.unirse_institucion(text, text, text), public.excusas_aprobadas() from public, anon;
+grant execute on function public.crear_institucion(text, text, text), public.unirse_institucion(text, text, text), public.excusas_aprobadas() to authenticated;
+revoke all on public.instituciones, public.miembros, public.excusas, public.convivencia from anon;
+grant select, update on public.instituciones to authenticated;
+grant select, delete on public.miembros to authenticated;
+grant select, insert, update, delete on public.excusas, public.convivencia to authenticated;
