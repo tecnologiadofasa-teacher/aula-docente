@@ -59,7 +59,7 @@ En **Ajustes → Horario de clases** se registran los bloques de la semana (día
 - En la planilla, los ítems sin casillas muestran **+ Agregar** para crear su columna con un toque (por ejemplo, la evaluación trimestral).
 - **Ajustes → Escala de valoración** define los niveles de desempeño, sus rangos y su color; las notas se colorean según el nivel.
 - **Estadísticas** (en Calificaciones) muestra un gráfico circular por nivel de desempeño, promedio, mediana, nota más alta y más baja y porcentaje de aprobación, del periodo o del acumulado anual, para un curso o todos los cursos de la asignatura. Se descarga como imagen.
-- **Ajustes → Periodos académicos** incluye accesos rápidos para 3 trimestres o 4 periodos.
+- **Ajustes → Periodos académicos** incluye accesos rápidos para 3 trimestres o 4 periodos; al agregar o quitar un periodo los porcentajes se reparten de nuevo para sumar 100 %.
 
 ## Informes de asistencia
 
@@ -79,7 +79,9 @@ Cuando el colegio usa el módulo de coordinación, los docentes **no** registran
 
 ## Módulo de coordinación
 
-1. La coordinadora ingresa con su cuenta y en **Ajustes → Institución** toca **Crear la institución**. Recibe dos códigos: uno para docentes y otro para otras personas de coordinación.
+1. En la pantalla de ingreso, la coordinadora elige la pestaña **Coordinación**, crea su cuenta e ingresa. La aplicación le muestra directamente **Crear la institución** (o unirse con el código de coordinación). Recibe dos códigos: uno para docentes y otro para otras personas de coordinación.
+   - En **Listas oficiales**: **Elegir cursos** (cuadrícula de primaria y bachillerato, por ejemplo 1001 a 1004), **Asignaturas sugeridas** (áreas obligatorias de la Ley 115 de 1994, arts. 23 y 31, más las que agregue el colegio) e **Importar estudiantes**. Para cambiar estudiantes de curso, se marcan en la lista y se elige el curso de destino.
+   - La coordinación no ve opciones propias del docente (forma de calificar, horario, Google Drive).
 2. Cada docente escribe el código en **Ajustes → Institución**.
 3. En **Coordinación** aparecen:
    - **Hoy**: inasistencias del día de todos los cursos, sin importar qué docente tomó la lista; se actualiza cada minuto. Mensaje para el grupo del curso y WhatsApp al acudiente.
