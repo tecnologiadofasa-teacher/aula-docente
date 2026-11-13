@@ -5,7 +5,7 @@
    2. GOOGLE_CLIENT_ID (opcional): ID de cliente OAuth web de Google Cloud, para subir evidencias a
       Google Drive. Si lo dejas vacío, las evidencias se registran con enlaces. */
 window.AULA_CONFIG = {
-  SUPABASE_URL: "https://TU_PROYECTO.supabase.co",
-  SUPABASE_KEY: "TU_CLAVE_PUBLICA",
+  SUPABASE_URL: "https://kxjizqrbcyfqzdwmufzg.supabase.co",
+  SUPABASE_KEY: "sb_publishable_Rc6g76ZZMmdIV509jkpmWQ__N7M0HfR",
   GOOGLE_CLIENT_ID: ""
 };
