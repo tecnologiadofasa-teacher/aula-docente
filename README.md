@@ -61,6 +61,13 @@ En **Ajustes → Horario de clases** se registran los bloques de la semana (día
 - **Estadísticas** (en Calificaciones) muestra un gráfico circular por nivel de desempeño, promedio, mediana, nota más alta y más baja y porcentaje de aprobación, del periodo o del acumulado anual, para un curso o todos los cursos de la asignatura. Se descarga como imagen.
 - **Ajustes → Periodos académicos** incluye accesos rápidos para 3 trimestres o 4 periodos.
 
+## Informes de asistencia
+
+En **Asistencia**:
+- **Consolidado**: asistencia y marcas de uniforme por estudiante, por curso o todos los cursos, por asignatura o todas, por periodo o entre fechas (por ejemplo, del inicio del trimestre a hoy). Se descarga en CSV o se copia como resumen.
+- **Inasistencias del día**: estudiantes con falta en la fecha elegida, por curso, con mensaje listo para el grupo de WhatsApp del curso y botón para escribir a cada acudiente (si su teléfono está en la ficha). Opcionalmente incluye faltas con excusa, tardanzas y uniforme. Las plantillas de mensaje se editan ahí mismo.
+- Los informes incluyen las clases en las que el docente tomó asistencia.
+
 ## Aula virtual y acceso de estudiantes
 
 1. En **Aula virtual**, genera un código para cada clase (curso + asignatura) y usa **Copiar invitación** para enviarlo por WhatsApp o correo.

@@ -171,6 +171,8 @@ body.nologin #gear{display:none}
 .stt{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:12px 0}.stt div{border:1px solid var(--line);border-radius:10px;padding:8px 10px}.stt b{display:block;font-size:20px}.stt span{font-size:12px;color:var(--mut)}
 .pie path:hover,.pie circle:hover{opacity:.85}
 .mrc{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}.mb{border:1px solid var(--line);background:#fff;border-radius:20px;padding:2px 9px;font-size:11.5px;cursor:pointer;color:var(--mut)}.mb.on{background:#6c3483;border-color:#6c3483;color:#fff;font-weight:600}
+.msg{white-space:pre-wrap;background:#e9f7ef;border:1px solid #cdebd8;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:10px}
+.btn.wa{background:#1f8f4e;border-color:#1f8f4e;color:#fff}
 .load{display:flex;align-items:center;justify-content:center;min-height:50vh;color:var(--mut);flex-direction:column;gap:8px;text-align:center;padding:20px}
 </style>
 </head>
@@ -493,6 +495,7 @@ function vAsistencia(){
  const cnt={};for(const e of es){const c=reg[e.id];if(c)cnt[c]=(cnt[c]||0)+1;}
  const fechas=Object.values(S.asis).filter(x=>x.cursoId===cur.id&&x.asigId===as.id&&x.perId===ctx.p).map(x=>x.fecha).sort().reverse();
  let h=`<div class="row" style="margin-bottom:10px"><h2 style="margin:0" class="sp">Asistencia</h2>${downloads?`<button class="btn sm" data-go="csvAsis">Exportar CSV</button>`:""}</div>
+ <div class="row" style="margin-bottom:12px"><button class="btn" data-go="inas">Inasistencias del día</button><button class="btn" data-go="cons">Consolidado</button></div>
  <div class="card"><div class="f2"><label class="f">Fecha<input type="date" id="as_f" value="${UI.fecha}"></label><label class="f">Periodo<input type="text" value="${esc(perN)}${perF?"":" (por selección)"}" disabled></label></div>
  <label class="f">Tema de la clase<input type="text" id="as_tema" value="${esc(d&&d.tema||"")}" placeholder="Opcional"></label><label class="f">Observaciones de la clase<textarea id="as_obs" placeholder="Opcional" style="min-height:56px">${esc(d&&d.obs||"")}</textarea></label>
  <div class="row sm"><button class="btn sm" data-go="todosP">Marcar presentes a los demás</button>${d?`<button class="btn sm dan" data-go="borrarDia">Borrar este día</button>`:""}<span class="sp"></span><span class="mut">${cods.map(c=>`${esc(c.c)}: ${cnt[c.c]||0}`).join(" · ")} · Sin marcar: ${es.length-Object.keys(cnt).reduce((s,x)=>s+cnt[x],0)}${mcs.map(m=>{const n=es.filter(e=>ext[e.id]===m.c).length;return n?` · ${esc(m.nombre)}: ${n}`:"";}).join("")}</span></div></div>
@@ -780,6 +783,8 @@ $("#main").addEventListener("click",async e=>{
   case"datos":return formDatos();case"curso":return formCurso();case"asig":return formAsig();
   case"est":if(!cursosArr().length)return toast("Primero crea un curso.",true);return formEst(null);
   case"imp":return importar();
+  case"inas":UI.inas=null;return inasistencias();
+  case"cons":UI.cons=null;return consolidado();
   case"stats":return estadisticas();
   case"plantilla":return formPlantilla();
   case"horario":return formHorario();
@@ -1054,6 +1059,79 @@ function pieSVG(datos,total,titulo){
 function svgPNG(svg,nombre){if(!svg)return;const xml=new XMLSerializer().serializeToString(svg);const img=new Image();const vb=svg.viewBox.baseVal;const k=2;
  img.onload=()=>{const c=document.createElement("canvas");c.width=vb.width*k;c.height=vb.height*k;const g=c.getContext("2d");g.drawImage(img,0,0,c.width,c.height);c.toBlob(b=>{if(!b)return toast("No se pudo generar la imagen.",true);const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=nombre;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);},"image/png");};
  img.onerror=()=>toast("No se pudo generar la imagen.",true);img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(xml);}
+
+/* ---------- INFORMES DE ASISTENCIA ---------- */
+function asisFiltro(o){return Object.values(S.asis).filter(d=>(!o.cursoId||d.cursoId===o.cursoId)&&(!o.asigId||d.asigId===o.asigId)&&(o.perId?d.perId===o.perId:true)&&(!o.desde||d.fecha>=o.desde)&&(!o.hasta||d.fecha<=o.hasta)&&S.cursos[d.cursoId]);}
+function resumenEst(eid,docs){const r={ses:0,falta:0,just:0,tarde:0,m:{}};for(const d of docs){const c=(d.reg||{})[eid];const x=(d.extra||{})[eid];if(x)r.m[x]=(r.m[x]||0)+1;if(!c)continue;r.ses++;const t=codTipo(c);if(t==="falta")r.falta++;else if(t==="justificada")r.just++;else if(t==="tarde")r.tarde++;}r.pct=r.ses?Math.round(100*(r.ses-r.falta-r.just)/r.ses):null;return r;}
+function consolidado(){
+ const F=UI.cons||(UI.cons={curso:ctx.c||"",asig:"",modo:"per",per:ctx.p,desde:((cfg().periodos.find(p=>p.id===ctx.p)||{}).inicio)||"",hasta:hoy()});
+ const mcs=marcasCfg();const cursos=F.curso?[S.cursos[F.curso]].filter(Boolean):cursosArr();
+ const o={asigId:F.asig||null,perId:F.modo==="per"?F.per:null,desde:F.modo==="rango"?F.desde:null,hasta:F.modo==="rango"?F.hasta:null};
+ const perN=(cfg().periodos.find(p=>p.id===F.per)||{}).nombre||"";
+ const alcance=F.modo==="per"?perN:`${fFecha(F.desde)||"inicio"} a ${fFecha(F.hasta)||"hoy"}`;
+ const asigN=F.asig?(S.asigs[F.asig]||{}).nombre:"Todas mis asignaturas";
+ const bloques=cursos.map(c=>{const docs=asisFiltro({...o,cursoId:c.id});const filas=estsCurso(c.id).map(e=>({e,r:resumenEst(e.id,docs)}));const dias=new Set(docs.map(d=>d.fecha)).size;return{c,docs,filas,dias};});
+ UI.consData={bloques,alcance,asigN,mcs};
+ openModal(`<div class="hd"><h3>Consolidado de asistencia</h3><button class="x" data-close>×</button></div>
+ <div class="f2"><label class="f">Curso<select id="cn_c"><option value="">Todos los cursos</option>${cursosArr().map(c=>`<option value="${c.id}" ${c.id===F.curso?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select></label>
+ <label class="f">Asignatura<select id="cn_a"><option value="">Todas mis asignaturas</option>${Object.values(S.asigs).sort(byName).map(a=>`<option value="${a.id}" ${a.id===F.asig?"selected":""}>${esc(a.nombre)}</option>`).join("")}</select></label></div>
+ <div class="seg" style="margin-bottom:10px"><button data-cm="per" class="${F.modo==="per"?"on":""}">Por periodo</button><button data-cm="rango" class="${F.modo==="rango"?"on":""}">Entre fechas</button></div>
+ ${F.modo==="per"?`<label class="f">Periodo<select id="cn_p">${cfg().periodos.map(p=>`<option value="${p.id}" ${p.id===F.per?"selected":""}>${esc(p.nombre)}</option>`).join("")}</select></label>`:`<div class="f2"><label class="f">Desde<input type="date" id="cn_d" value="${esc(F.desde)}"></label><label class="f">Hasta<input type="date" id="cn_h" value="${esc(F.hasta)}"></label></div><div class="row" style="margin:-4px 0 10px"><button class="btn sm" id="cn_hoy">Inicio del periodo a hoy</button></div>`}
+ <div class="mut sm" style="margin-bottom:8px">${esc(asigN)} · ${esc(alcance)}</div>
+ ${bloques.map(b=>{const tf=b.filas.reduce((s,f)=>s+f.r.falta,0),tj=b.filas.reduce((s,f)=>s+f.r.just,0);const ps=b.filas.filter(f=>f.r.pct!=null);const prom=ps.length?Math.round(ps.reduce((s,f)=>s+f.r.pct,0)/ps.length):null;
+  return `<div style="margin-bottom:14px"><div class="row" style="margin-bottom:6px"><b class="sp">${esc(b.c.nombre)}</b><span class="mut sm">${b.dias} día(s) con registro · asistencia ${prom==null?"—":prom+"%"} · ${tf} fallas · ${tj} justificadas</span></div>
+  ${b.docs.length?`<div class="tw"><table class="g"><thead><tr><th class="st">Estudiante</th><th>Clases</th><th>Fallas</th><th>Justif.</th><th>Tardes</th><th>% asist.</th>${mcs.map(m=>`<th>${esc(m.nombre)}</th>`).join("")}</tr></thead><tbody>${b.filas.map(({e,r})=>`<tr><td class="st">${esc(nomEst(e))}</td><td>${r.ses}</td><td style="${r.falta>=(+cfg().alertaFallas||3)?"color:var(--bad);font-weight:700":""}">${r.falta}</td><td>${r.just}</td><td>${r.tarde}</td><td>${r.pct==null?"—":r.pct+"%"}</td>${mcs.map(m=>`<td>${r.m[m.c]||0}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`:'<div class="mut sm">Sin registros de asistencia en este rango.</div>'}</div>`;}).join("")}
+ <div class="ft"><button class="btn" id="cn_txt">Copiar resumen</button><button class="btn pri" id="cn_csv">Descargar CSV</button></div>`,sh=>{
+  const upd=()=>{F.curso=$("#cn_c").value;F.asig=$("#cn_a").value;if($("#cn_p"))F.per=$("#cn_p").value;if($("#cn_d")){F.desde=$("#cn_d").value;F.hasta=$("#cn_h").value;}consolidado();};
+  sh.addEventListener("change",ev=>{if(ev.target.matches("select,input[type=date]"))upd();});
+  sh.addEventListener("click",ev=>{const b=ev.target.closest("[data-cm]");if(b){F.modo=b.dataset.cm;consolidado();}});
+  const hb=$("#cn_hoy",sh);if(hb)hb.onclick=()=>{const p=periodoDeFecha(hoy())||cfg().periodos.find(x=>x.id===ctx.p)||{};F.desde=p.inicio||"";F.hasta=hoy();consolidado();};
+  $("#cn_csv",sh).onclick=()=>{const rows=[["Curso","Documento","Apellidos","Nombres","Clases","Fallas","Justificadas","Tardes","% asistencia",...mcs.map(m=>m.nombre)]];
+   for(const b of bloques)for(const {e,r} of b.filas)rows.push([b.c.nombre,e.documento||"",e.apellidos||"",e.nombres||"",r.ses,r.falta,r.just,r.tarde,r.pct==null?"":r.pct,...mcs.map(m=>r.m[m.c]||0)]);
+   bajar(`Consolidado_asistencia_${slug(F.curso?S.cursos[F.curso].nombre:"todos")}_${slug(alcance)}.csv`,csv(rows));};
+  $("#cn_txt",sh).onclick=()=>{const c=cfg();let t=`${c.institucion?"*"+c.institucion+"*\n":""}Consolidado de asistencia y uniforme\n${asigN} · ${alcance}\n`;
+   for(const b of bloques){t+=`\n*Curso ${b.c.nombre}* (${b.dias} día(s) con registro)\n`;const con=b.filas.filter(f=>f.r.falta||f.r.just||f.r.tarde||Object.keys(f.r.m).length);
+    t+=con.length?con.map(({e,r})=>`- ${nomEst(e)}: ${[r.falta?r.falta+" falta(s)":"",r.just?r.just+" justificada(s)":"",r.tarde?r.tarde+" tarde(s)":"",...mcs.map(m=>r.m[m.c]?`${m.nombre.toLowerCase()}: ${r.m[m.c]}`:"")].filter(Boolean).join(", ")}`).join("\n"):"Sin novedades.";t+="\n";}
+   if(c.docente)t+=`\n${c.docente}`;copiar(t);};
+ });
+}
+async function copiar(t){try{await navigator.clipboard.writeText(t);toast("Copiado. Pégalo en WhatsApp.");}catch(e){openModal(`<div class="hd"><h3>Texto para copiar</h3><button class="x" data-close>×</button></div><textarea style="min-height:240px">${esc(t)}</textarea><p class="sm mut">Mantén presionado el texto, selecciona todo y cópialo.</p>`);}}
+const telWA=t=>{let d=String(t||"").replace(/\D/g,"");if(!d)return"";if(d.length===10&&d[0]==="3")d="57"+d;return d.length>=11?d:"";};
+const MSG_G="*{institucion}*\nReporte de inasistencia del {fecha}\nCurso {curso}\n\nLos siguientes estudiantes {titulo}:\n{lista}\n\nAgradecemos a las familias comunicarse con la coordinación para justificar la inasistencia.\n{docente}";
+const MSG_F="Buen día, {acudiente}. Le informamos que {estudiante}, del curso {curso}, {detalle} el {fecha}. Si la inasistencia tiene excusa, por favor envíela a la coordinación.\n{docente} – {institucion}";
+function llenar(t,v){return t.replace(/\{(\w+)\}/g,(m,k)=>v[k]!=null?v[k]:m).replace(/^\*\*\n/,"").replace(/\n{3,}/g,"\n\n").trim();}
+function inasistencias(){
+ const F=UI.inas||(UI.inas={fecha:UI.fecha||hoy(),curso:"",falta:true,just:false,tarde:false,marcas:false});
+ const c=cfg(),mcs=marcasCfg();const tg=c.msgGrupo||MSG_G,tf=c.msgFamilia||MSG_F;
+ const cursos=F.curso?[S.cursos[F.curso]].filter(Boolean):cursosArr();
+ const bloques=cursos.map(cu=>{const docs=Object.values(S.asis).filter(d=>d.cursoId===cu.id&&d.fecha===F.fecha);
+  const lista=[];for(const e of estsCurso(cu.id)){const det=[];
+   for(const d of docs){const cod=(d.reg||{})[e.id],t=cod?codTipo(cod):"",x=(d.extra||{})[e.id];const an=(S.asigs[d.asigId]||{}).nombre||"";
+    if((F.falta&&t==="falta")||(F.just&&t==="justificada")||(F.tarde&&t==="tarde"))det.push({t,txt:`${(c.codigos.find(k=>k.c===cod)||{}).nombre||cod} en ${an}`});
+    if(F.marcas&&x)det.push({t:"marca",txt:`${(mcs.find(m=>m.c===x)||{}).nombre||x} en ${an}`});}
+   if(det.length)lista.push({e,det});}
+  return{cu,docs,lista};});
+ const fechaTxt=fFecha(F.fecha);
+ const msgCurso=b=>llenar(tg,{institucion:c.institucion||"",fecha:fechaTxt,curso:b.cu.nombre,docente:c.docente||"",titulo:F.falta&&!F.just&&!F.tarde&&!F.marcas?"no asistieron a clase":"presentan novedades de asistencia",lista:b.lista.map((x,i)=>`${i+1}. ${nomEst(x.e)}${F.just||F.tarde||F.marcas?" ("+x.det.map(d=>d.txt).join("; ")+")":""}`).join("\n")});
+ const msgFam=(b,x)=>llenar(tf,{institucion:c.institucion||"",fecha:fechaTxt,curso:b.cu.nombre,docente:c.docente||"",estudiante:`${x.e.nombres||""} ${x.e.apellidos||""}`.trim(),acudiente:x.e.acudiente||"acudiente",detalle:x.det.every(d=>d.t==="falta"||d.t==="justificada")?"no asistió a clase":"registró la siguiente novedad ("+x.det.map(d=>d.txt.toLowerCase()).join("; ")+")"});
+ openModal(`<div class="hd"><h3>Inasistencias del día</h3><button class="x" data-close>×</button></div>
+ <div class="f2"><label class="f">Fecha<input type="date" id="in_f" value="${esc(F.fecha)}"></label><label class="f">Curso<select id="in_c"><option value="">Todos mis cursos</option>${cursosArr().map(x=>`<option value="${x.id}" ${x.id===F.curso?"selected":""}>${esc(x.nombre)}</option>`).join("")}</select></label></div>
+ <div class="row sm" style="margin-bottom:10px;gap:12px"><label class="chk" style="margin:0"><input type="checkbox" data-op="falta" ${F.falta?"checked":""}><span>Fallas sin excusa</span></label><label class="chk" style="margin:0"><input type="checkbox" data-op="just" ${F.just?"checked":""}><span>Con excusa</span></label><label class="chk" style="margin:0"><input type="checkbox" data-op="tarde" ${F.tarde?"checked":""}><span>Tardanzas</span></label>${mcs.length?`<label class="chk" style="margin:0"><input type="checkbox" data-op="marcas" ${F.marcas?"checked":""}><span>Uniforme</span></label>`:""}</div>
+ <div class="banner i sm">Incluye las clases en las que tú tomaste asistencia ese día. Lo que registran otros docentes no aparece aquí.</div>
+ ${bloques.map((b,bi)=>`<div class="card" style="padding:12px"><div class="row"><b class="sp">Curso ${esc(b.cu.nombre)}</b><span class="mut sm">${b.docs.length?b.docs.length+" clase(s) registrada(s)":"Sin asistencia tomada"}</span></div>
+  ${b.lista.length?`<div class="list">${b.lista.map((x,i)=>{const w=telWA(x.e.telefono);return `<div class="it">${av(x.e,"s")}<div class="nm"><b>${esc(nomEst(x.e))}</b><span class="mut sm">${esc(x.det.map(d=>d.txt).join(" · "))}${x.e.acudiente?" · Acudiente: "+esc(x.e.acudiente):""}</span></div>${w?`<a class="btn sm wa" href="https://wa.me/${w}?text=${encodeURIComponent(msgFam(b,x))}" target="_blank" rel="noopener">WhatsApp</a>`:'<span class="mut sm">Sin teléfono</span>'}</div>`;}).join("")}</div>
+  <div class="msg">${esc(msgCurso(b))}</div><div class="row" style="margin-top:8px"><button class="btn sm pri" data-cp="${bi}">Copiar mensaje</button><a class="btn sm wa" href="https://wa.me/?text=${encodeURIComponent(msgCurso(b))}" target="_blank" rel="noopener">Abrir en WhatsApp</a></div>`:`<div class="mut sm" style="margin-top:6px">${b.docs.length?"Sin novedades.":"No hay registro de asistencia de este curso en la fecha."}</div>`}</div>`).join("")}
+ <details style="margin-top:6px"><summary class="sm"><b>Editar plantillas de mensaje</b></summary>
+  <p class="sm mut">Puedes usar: {institucion}, {fecha}, {curso}, {titulo}, {lista}, {docente}; en el individual también {estudiante}, {acudiente} y {detalle}. En WhatsApp, el texto entre *asteriscos* sale en negrita.</p>
+  <label class="f">Mensaje para el grupo del curso<textarea id="in_tg" style="min-height:150px">${esc(tg)}</textarea></label>
+  <label class="f">Mensaje individual a cada familia<textarea id="in_tf" style="min-height:100px">${esc(tf)}</textarea></label>
+  <div class="row"><button class="btn sm pri" id="in_sv">Guardar plantillas</button><button class="btn sm" id="in_rs">Restaurar originales</button></div></details>`,sh=>{
+  sh.addEventListener("change",ev=>{const t=ev.target;if(t.id==="in_f"){F.fecha=t.value||hoy();inasistencias();}else if(t.id==="in_c"){F.curso=t.value;inasistencias();}else if(t.dataset.op){F[t.dataset.op]=t.checked;inasistencias();}});
+  sh.addEventListener("click",ev=>{const b=ev.target.closest("[data-cp]");if(b)copiar(msgCurso(bloques[+b.dataset.cp]));});
+  $("#in_sv",sh).onclick=async()=>{await saveCfg({msgGrupo:$("#in_tg").value,msgFamilia:$("#in_tf").value});toast("Plantillas guardadas");inasistencias();};
+  $("#in_rs",sh).onclick=async()=>{await saveCfg({msgGrupo:"",msgFamilia:""});inasistencias();};
+ });
+}
 
 /* ---------- PORTAL DEL ESTUDIANTE ---------- */
 const PT={mats:[],pubs:[],err:"",loading:false,filtro:"",unirse:false,join:null,joinErr:"",q:""};let joinPend=null;
