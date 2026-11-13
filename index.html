@@ -418,7 +418,7 @@ function vInicio(){
 function vEstudiantes(){
  if(!cursosArr().length)return need("Primero crea un curso en Ajustes.");
  if(UI.cursoFiltro==null)UI.cursoFiltro=ctx.c;
- return `<div class="row" style="margin-bottom:10px"><h2 style="margin:0" class="sp">Estudiantes</h2>${modoOficial()?`<button class="btn" data-go="carga">Mi carga académica</button>`:UI.selMode?`<button class="btn" data-go="selOff">Terminar selección</button>`:`<button class="btn" data-go="selOn">Seleccionar</button><button class="btn" data-go="imp">Importar lista</button><button class="btn pri" data-go="est">+ Registrar</button>`}</div>${modoOficial()?`<div class="banner i sm">Las listas las administra coordinación. Aquí puedes tomar la foto, escribir observaciones y registrar la autorización de datos. Si falta un estudiante o hay un error en un nombre, avísale a coordinación.</div>`:""}
+ return `<div class="row" style="margin-bottom:10px"><h2 style="margin:0" class="sp">Estudiantes</h2>${modoOficial()?`<button class="btn" data-go="carga">Mi carga académica</button>`:UI.selMode?`<button class="btn" data-go="selOff">Terminar selección</button>`:`<button class="btn" data-go="selOn">Seleccionar</button><button class="btn" data-go="imp">Importar lista</button><button class="btn pri" data-go="est">+ Registrar</button>`}</div>${hayDuplicados()?`<div class="banner row" style="gap:8px"><span class="sp sm">Tienes <b>${locales().e.length}</b> estudiante(s) que registraste antes de la lista oficial, por eso aparecen repetidos.</span><button class="btn sm pri" data-go="unificar">Unificar y quitar repetidos</button></div>`:""}${modoOficial()?`<div class="banner i sm">Las listas las administra coordinación. Aquí puedes tomar la foto, escribir observaciones y registrar la autorización de datos. Si falta un estudiante o hay un error en un nombre, avísale a coordinación.</div>`:""}
  <div class="row" style="margin-bottom:12px"><select id="fCur" style="width:auto;flex:0 1 200px"><option value="">Todos los cursos</option>${cursosArr().map(c=>`<option value="${c.id}" ${c.id===UI.cursoFiltro?"selected":""}>${esc(c.nombre)}</option>`).join("")}<option value="__ret" ${UI.cursoFiltro==="__ret"?"selected":""}>Retirados</option></select><input type="search" id="q" placeholder="Buscar por nombre o documento" value="${esc(UI.q)}" style="flex:1 1 200px"></div><div id="selBar"></div><div id="estList"></div>`;
 }
 function renderEstList(){
@@ -808,6 +808,7 @@ $("#main").addEventListener("click",async e=>{
   case"datos":return formDatos();case"curso":return formCurso();case"asig":return formAsig();
   case"est":if(modoOficial())return toast("Las listas las administra coordinación.",true);if(!cursosArr().length)return toast("Primero crea un curso.",true);return formEst(null);
   case"imp":return importar();
+  case"unificar":return formUnificar();
   case"crearInst2":return crearInst2();
   case"unirCoord":return unirInst("#cc_cod");
   case"carga":return formCarga();
@@ -1436,7 +1437,7 @@ function formCarga(){
    try{await putMany("cursos",cur);await putMany("asigs",asg);await syncOficial();closeModal();fixCtx();toast("Carga académica guardada");render();}catch(e){ev.target.disabled=false;toast(dbMsg(e),true);}};
  });}
 function cardCarga(){const mis=Object.values(S.asigs).filter(a=>(a.cursoIds||[]).length).sort(byName);
- return `<div class="card sd"><div class="row"><h3 class="sp" style="margin:0">Mi carga académica</h3><button class="btn sm pri" data-go="carga">Configurar</button></div>
+ return `<div class="card sd"><div class="row"><h3 class="sp" style="margin:0">Mi carga académica</h3><button class="btn sm pri" data-go="carga">Configurar</button></div>${hayDuplicados()?`<div class="banner row" style="gap:8px;margin:8px 0 0"><span class="sp sm">Hay cursos o estudiantes repetidos de antes de la lista oficial.</span><button class="btn sm pri" data-go="unificar">Unificar</button></div>`:""}
  <div class="sm mut" style="margin-top:4px">Cursos, estudiantes y asignaturas vienen de las listas oficiales de ${esc((INST.inst||{}).nombre||"la institución")}.</div>
  <div class="list">${mis.length?mis.map(a=>`<div class="it"><div class="nm"><b>${esc(a.nombre)}</b><span class="mut sm">${esc((a.cursoIds||[]).map(i=>(S.cursos[i]||{}).nombre).filter(Boolean).join(", "))} · ${esc(comps(a).map(k=>k.nombre+" "+k.peso+"%").join(", "))}</span></div><button class="btn sm" data-asig="${a.id}">Calificación</button></div>`).join(""):'<div class="mut sm">Aún no has configurado tu carga.</div>'}</div></div>`;}
 
@@ -1581,6 +1582,66 @@ function formExcusaCurso(){const cs=cursosCo();if(!cs.length)return toast("No ha
  openModal(`<div class="hd"><h3>Excusa para un curso completo</h3><button class="x" data-close>×</button></div><p class="sm mut">Útil para salidas pedagógicas, actividades institucionales o representaciones del colegio. Se registra una excusa para cada estudiante activo del curso.</p>
  <label class="f">Curso<select id="ec_c">${cs.map(c=>`<option value="${esc(c.n)}">${esc(c.nombre)} (${c.est.length})</option>`).join("")}</select></label><div class="ft"><button class="btn pri" id="ec_ok">Continuar</button></div>`,sh=>{
   $("#ec_ok",sh).onclick=()=>{const cu=CO.cursos[$("#ec_c").value];if(!cu||!cu.est.length)return toast("El curso no tiene estudiantes.",true);formExcusaMasiva(cu.est,`Excusa para el curso ${cu.nombre} (${cu.est.length} estudiantes)`);};});}
+
+/* ---------- UNIFICAR CON LA LISTA OFICIAL ---------- */
+const locales=()=>({c:Object.values(S.cursos).filter(c=>!c.oficial&&!OF.cursos.some(o=>o.id===c.id)),a:Object.values(S.asigs).filter(a=>!a.oficial&&!OF.asigs.some(o=>o.id===a.id)),e:Object.values(S.ests).filter(e=>!e.oficial)});
+const hayDuplicados=()=>modoOficial()&&(locales().e.length>0||locales().c.length>0);
+function planUnificar(selA){const L=locales();const mapC={},mapA={},mapE={},sinE=[];
+ for(const c of L.c){const o=OF.cursos.find(x=>norm(x.nombre)===norm(c.nombre));if(o)mapC[c.id]=o.id;}
+ for(const a of L.a){const v=selA&&selA[a.id]!==undefined?selA[a.id]:((OF.asigs.find(x=>norm(x.nombre)===norm(a.nombre))||{}).id||"");if(v)mapA[a.id]=v;}
+ for(const e of L.e){const cid=mapC[e.cursoId]||e.cursoId;const d=digits(e.documento),k=norm((e.apellidos||"")+" "+(e.nombres||""));
+  const o=OF.ests.find(x=>(d&&digits(x.documento)===d))||OF.ests.find(x=>x.curso_id===cid&&norm(x.apellidos+" "+x.nombres)===k);if(o)mapE[e.id]=o.id;else sinE.push(e);}
+ return{L,mapC,mapA,mapE,sinE};}
+function formUnificar(){
+ if(!modoOficial())return;const selA={};
+ const pinta=()=>{const P=planUnificar(selA);const nE=Object.keys(P.mapE).length;
+  return `<p class="sm mut">Encontré datos que registraste antes de que coordinación subiera la lista oficial. Al unificar, cada estudiante se cambia por su registro oficial y conserva sus notas, asistencia, evidencias y foto. Los cursos y asignaturas repetidos también se unifican.</p>
+  <h3>Cursos</h3>${P.L.c.length?P.L.c.map(c=>`<div class="sm">${esc(c.nombre)} → ${P.mapC[c.id]?`<b>${esc(OF.cursos.find(o=>o.id===P.mapC[c.id]).nombre)}</b> (oficial)`:`<span style="color:var(--warn)">no existe en la lista oficial; se elimina</span>`}</div>`).join(""):'<div class="sm mut">Sin cursos repetidos.</div>'}
+  <h3 style="margin-top:10px">Asignaturas</h3>${P.L.a.length?P.L.a.map(a=>`<label class="f" style="margin-bottom:6px">${esc(a.nombre)} se une con<select data-ua="${esc(a.id)}"><option value="">Mantenerla aparte</option>${OF.asigs.map(o=>`<option value="${esc(o.id)}" ${P.mapA[a.id]===o.id?"selected":""}>${esc(o.nombre)}</option>`).join("")}</select></label>`).join(""):'<div class="sm mut">Sin asignaturas repetidas.</div>'}
+  <h3 style="margin-top:10px">Estudiantes</h3><div class="sm"><b>${nE}</b> se unifican con la lista oficial.</div>
+  ${P.sinE.length?`<div class="banner" style="margin-top:6px"><b>${P.sinE.length}</b> no están en la lista oficial y se eliminarán: ${P.sinE.slice(0,40).map(e=>esc(nomEst(e))).join(", ")}${P.sinE.length>40?"…":""}. Si alguno debería estar, pídele a coordinación que lo agregue antes de unificar.</div>`:""}
+  <div class="prog" id="un_p"></div>`;};
+ openModal(`<div class="hd"><h3>Unificar con la lista oficial</h3><button class="x" data-close>×</button></div><div id="un_b">${pinta()}</div><div class="ft"><button class="btn pri" id="un_ok">Unificar</button></div>`,sh=>{
+  sh.addEventListener("change",e=>{const a=e.target.dataset.ua;if(a!==undefined){selA[a]=e.target.value;$("#un_b").innerHTML=pinta();}});
+  $("#un_ok",sh).onclick=async ev=>{const P=planUnificar(selA);
+   if(P.sinE.length&&!await ask(`Se eliminarán ${P.sinE.length} estudiante(s) que no están en la lista oficial, con sus notas y asistencia. Los demás conservan todo su historial. ¿Continuar?`,"Unificar",true))return;
+   ev.target.disabled=true;try{await aplicarUnificar(P,m=>{$("#un_p").textContent=m;});closeModal();toast("Listo: estudiantes unificados con la lista oficial");render();}catch(e){ev.target.disabled=false;toast(dbMsg(e),true);}};});}
+async function delMany(col,ids){ids=[...new Set(ids)];if(!ids.length)return;for(const id of ids)delete S[col][id];sched();
+ for(let i=0;i<ids.length;i+=200){const {error}=await sb.from("docs").delete().eq("user_id",uid).eq("col",col).in("id",ids.slice(i,i+200));if(error)throw error;}guardarCache();}
+async function aplicarUnificar(P,log){const {mapC,mapA,mapE}=P;const fuera=new Set(P.sinE.map(e=>e.id));const mc=id=>mapC[id]||id,ma=id=>mapA[id]||id,me=id=>mapE[id]||id;
+ log("Unificando cursos y asignaturas…");
+ const curNuevos=[...new Set(Object.values(mapC))].filter(id=>!S.cursos[id]).map(id=>{const o=OF.cursos.find(x=>x.id===id);return{id,nombre:o.nombre,grado:o.grado||gradoDe(o.nombre),jornada:o.jornada,director:o.director,oficial:true};});
+ await putMany("cursos",curNuevos);
+ const asg=[],asgDel=[];
+ for(const a of P.L.a){const cIds=(a.cursoIds||[]).map(mc);
+  if(mapA[a.id]){const nid2=mapA[a.id],t=S.asigs[nid2],o=OF.asigs.find(x=>x.id===nid2);const tieneActs=Object.values(S.acts).some(x=>x.asigId===nid2);
+   asg.push({...(t||{id:nid2,horas:a.horas||"",creado:Date.now()}),nombre:o.nombre,oficial:true,componentes:(!t||!tieneActs)?(a.componentes||comps(a)):t.componentes,cursoIds:[...new Set([...((t&&t.cursoIds)||[]),...cIds])]});asgDel.push(a.id);}
+  else asg.push({...a,cursoIds:[...new Set(cIds)]});}
+ const yaA=new Set(asg.map(x=>x.id));for(const a of Object.values(S.asigs))if(!yaA.has(a.id)&&(a.cursoIds||[]).some(i=>mapC[i]))asg.push({...a,cursoIds:[...new Set(a.cursoIds.map(mc))]});
+ await putMany("asigs",asg);await delMany("asigs",asgDel);
+ log("Trasladando estudiantes…");
+ const est=[];for(const [vie,nue] of Object.entries(mapE)){const v=S.ests[vie],l=S.ests[nue],o=OF.ests.find(x=>x.id===nue);
+  const base=l||{id:nue,apellidos:o.apellidos,nombres:o.nombres,tipoDoc:o.tipo_doc,documento:o.documento,acudiente:o.acudiente,telefono:o.telefono,correo:o.correo,cursoId:o.curso_id,activo:!!o.activo,oficial:true,creado:Date.now()};
+  est.push({...base,foto:base.foto||v.foto||"",obs:[base.obs,v.obs].filter(Boolean).join("\n"),autorizacion:!!(base.autorizacion||v.autorizacion),nacimiento:base.nacimiento||v.nacimiento||""});}
+ await putMany("ests",est);
+ log("Trasladando notas, asistencia y evidencias…");
+ const acts=Object.values(S.acts).filter(x=>mapC[x.cursoId]||mapA[x.asigId]).map(x=>({...x,cursoId:mc(x.cursoId),asigId:ma(x.asigId)}));await putMany("acts",acts);
+ const notas=[];for(const d of Object.values(S.notas)){const n=d.n||{};if(!Object.keys(n).some(k=>mapE[k]||fuera.has(k)))continue;const nn={};for(const [k,v] of Object.entries(n))if(!mapE[k]&&!fuera.has(k))nn[k]=v;for(const [k,v] of Object.entries(n))if(mapE[k]&&nn[mapE[k]]==null)nn[mapE[k]]=v;notas.push({...d,n:nn});}
+ await putMany("notas",notas);
+ const asisN={},asisDel=[];for(const d of Object.values(S.asis)){const tocar=mapC[d.cursoId]||mapA[d.asigId]||Object.keys({...(d.reg||{}),...(d.extra||{})}).some(k=>mapE[k]||fuera.has(k));if(!tocar)continue;
+  const c2=mc(d.cursoId),a2=ma(d.asigId),k2=asisKey(c2,a2,d.fecha);const dest=asisN[k2]||(S.asis[k2]&&k2!==d.id?{...S.asis[k2],reg:{...(S.asis[k2].reg||{})},extra:{...(S.asis[k2].extra||{})}}:{...d,id:k2,cursoId:c2,asigId:a2,reg:{},extra:{}});
+  if(k2===d.id){for(const k of Object.keys(dest.reg))if(mapE[k]||fuera.has(k))delete dest.reg[k];for(const k of Object.keys(dest.extra))if(mapE[k]||fuera.has(k))delete dest.extra[k];}for(const [k,v] of Object.entries(d.reg||{}))if(!fuera.has(k)&&dest.reg[me(k)]==null)dest.reg[me(k)]=v;for(const [k,v] of Object.entries(d.extra||{}))if(!fuera.has(k)&&dest.extra[me(k)]==null)dest.extra[me(k)]=v;
+  if(!dest.tema&&d.tema)dest.tema=d.tema;if(!dest.obs&&d.obs)dest.obs=d.obs;asisN[k2]=dest;if(k2!==d.id)asisDel.push(d.id);}
+ await putMany("asis",Object.values(asisN));await delMany("asis",asisDel.filter(id=>!asisN[id]));
+ const ev=Object.values(S.evid).filter(v=>mapC[v.cursoId]||mapA[v.asigId]||(v.estIds||[]).some(k=>mapE[k])).map(v=>({...v,cursoId:mc(v.cursoId),asigId:ma(v.asigId),estIds:[...new Set((v.estIds||[]).map(me))]}));await putMany("evid",ev);
+ if((cfg().horario||[]).some(s=>mapC[s.cursoId]||mapA[s.asigId]))await saveCfg({horario:cfg().horario.map(s=>({...s,cursoId:mc(s.cursoId),asigId:ma(s.asigId)}))});
+ try{const {data:cods}=await sb.from("codigos").select("*").eq("teacher_id",uid);for(const c of (cods||[]))if(mapC[c.curso_id]||mapA[c.asig_id])await sb.from("codigos").update({curso_id:mc(c.curso_id),asig_id:ma(c.asig_id)}).eq("id",c.id);
+  const {data:ms}=await sb.from("matriculas").select("*").eq("teacher_id",uid);for(const m of (ms||[]))if(mapC[m.curso_id]||mapA[m.asig_id]||mapE[m.est_id])await sb.from("matriculas").update({curso_id:mc(m.curso_id),asig_id:ma(m.asig_id),est_id:me(m.est_id)}).eq("id",m.id);
+  const {data:ps}=await sb.from("publicaciones").select("id,clases,est_ids").eq("teacher_id",uid);for(const p of (ps||[])){const cl=(p.clases||[]).map(k=>{const [c,a]=k.split("|");return mc(c)+"|"+ma(a);}),es=(p.est_ids||[]).map(me);if(JSON.stringify(cl)!==JSON.stringify(p.clases)||JSON.stringify(es)!==JSON.stringify(p.est_ids))await sb.from("publicaciones").update({clases:cl,est_ids:es}).eq("id",p.id);}AV.loaded=false;}catch(e){}
+ log("Eliminando duplicados…");
+ await delMany("ests",[...Object.keys(mapE),...P.sinE.map(e=>e.id)]);
+ await delMany("cursos",P.L.c.map(c=>c.id));
+ await syncOficial();fixCtx();}
 
 /* ---------- PORTAL DEL ESTUDIANTE ---------- */
 const PT={mats:[],pubs:[],err:"",loading:false,filtro:"",unirse:false,join:null,joinErr:"",q:""};let joinPend=null;
