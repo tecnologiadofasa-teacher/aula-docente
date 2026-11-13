@@ -77,7 +77,6 @@ En **Asistencia**:
    - **Consolidado**: asistencia y uniforme por rango de fechas o por trimestre, con CSV.
    - **Alertas**: estudiantes que superan el porcentaje de inasistencia definido en el SIEE (crítico y preventivo) o que llevan varios días seguidos sin asistir.
    - **Excusas**: al aprobarlas, las faltas de esas fechas cuentan como justificadas en todas las asignaturas. Los docentes ven que la falta está excusada, pero no el motivo.
-   - **Observador**: anotaciones y situaciones de convivencia tipo I, II y III (Ley 1620 de 2013), con acciones, compromisos, remisión y seguimiento. Solo lo ve coordinación.
    - **Institución**: códigos, miembros y parámetros de alertas.
 
 La coordinación **no** tiene acceso a calificaciones, actividades, evidencias ni al aula virtual de los docentes; la base de datos lo impide. Los estudiantes de un mismo curso registrados por distintos docentes se reconocen por el nombre del curso y el nombre completo (o el documento), así que conviene que todos usen el mismo nombre de curso y la misma lista.
@@ -110,6 +109,23 @@ Comparte la dirección de GitHub Pages. Cada docente crea su cuenta y empieza co
 - Los datos de menores requieren la autorización de los acudientes (Ley 1581 de 2012). La ficha del estudiante incluye un campo para registrarla.
 - **Ajustes → Copia de seguridad** descarga todos los registros en un archivo `.json` que puede restaurarse.
 
-## Límites del plan gratuito de Supabase
+## Capacidad y límites (colegio de unos 600 estudiantes)
 
-500 MB de base de datos y 1 GB de archivos (adjuntos del aula virtual). Con miniaturas de unos 20 KB por estudiante, alcanza para varios miles de estudiantes con sus notas y asistencias. Los proyectos gratuitos se pausan tras una semana sin actividad y se reactivan desde el panel de Supabase.
+Estimación para un año con 25 docentes, 20 cursos y registro diario de asistencia:
+
+| Concepto | Estimación anual | Plan gratuito |
+|---|---|---|
+| Base de datos (estudiantes con foto en la lista de cada docente, asistencia, notas) | 150 a 300 MB | 500 MB |
+| Archivos del aula virtual (Supabase Storage) | depende del uso | 1 GB |
+| Transferencia mensual (egress) | 1 a 3 GB con la caché local | 5 GB |
+| Usuarios activos (docentes + estudiantes) | unos 650 | 50.000 |
+
+Medidas incluidas: la aplicación guarda una copia local en el dispositivo y solo descarga lo que cambió; la coordinación no descarga fotos; las fotos se reducen a miniaturas de unos 8 KB; los adjuntos del aula virtual tienen un máximo de 10 MB (lo más pesado se comparte como enlace de Drive).
+
+Puntos a tener en cuenta:
+- **Pausa por inactividad**: el plan gratuito pausa el proyecto tras 7 días sin uso (vacaciones). Los datos no se pierden; se reactiva desde el panel de Supabase.
+- **Sin copias automáticas** en el plan gratuito: descarga periódicamente la copia de seguridad (.json) desde Ajustes.
+- **Correos de registro**: el servicio de correo incluido en Supabase envía muy pocos correos por hora. Para registrar a muchos docentes con correo y contraseña, configura un SMTP propio (Authentication → Emails → SMTP) o usa el ingreso con Google.
+- **Ingreso de estudiantes desde la misma red**: Supabase limita los ingresos anónimos a 30 por hora por dirección IP. Si un salón entero entra desde el wifi del colegio, sube ese límite en Authentication → Rate Limits.
+- **Crecimiento**: al terminar el año, descarga la copia y elimina los cursos antiguos; si la base supera unos 400 MB, el plan Pro (25 USD al mes) da 8 GB, 250 GB de transferencia y copias diarias.
+- **Datos personales**: la base de datos queda en servidores de Supabase fuera de Colombia; la institución debe contar con su política de tratamiento de datos y la autorización de las familias (Ley 1581 de 2012).

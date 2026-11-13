@@ -199,8 +199,8 @@ grant select, delete on public.matriculas to authenticated;
 --    Ruta: <id del docente>/<id de la publicación>/<archivo>
 ------------------------------------------------------------------
 insert into storage.buckets (id, name, public, file_size_limit)
-values ('materiales', 'materiales', false, 52428800)
-on conflict (id) do update set public = false, file_size_limit = 52428800;
+values ('materiales', 'materiales', false, 10485760)
+on conflict (id) do update set public = false, file_size_limit = 10485760;
 
 drop policy if exists "materiales_subir" on storage.objects;
 drop policy if exists "materiales_borrar" on storage.objects;
@@ -318,34 +318,12 @@ create table if not exists public.excusas (
   updated_at     timestamptz not null default now(),
   check (hasta >= desde)
 );
-create table if not exists public.convivencia (
-  id             uuid primary key default gen_random_uuid(),
-  inst_id        uuid not null references public.instituciones (id) on delete cascade,
-  curso          text not null,
-  curso_nombre   text not null default '',
-  est_key        text not null,
-  est_doc        text not null default '',
-  est_nombre     text not null default '',
-  fecha          date not null,
-  clase          text not null check (clase in ('observacion', 'tipo1', 'tipo2', 'tipo3')),
-  descripcion    text not null default '',
-  acciones       text not null default '',
-  compromisos    text not null default '',
-  remision       text not null default '',
-  seguimiento    text not null default '',
-  estado         text not null default 'abierto' check (estado in ('abierto', 'cerrado')),
-  registrada_por uuid default auth.uid(),
-  created_at     timestamptz not null default now(),
-  updated_at     timestamptz not null default now()
-);
+-- El observador y convivencia se retiraron de la aplicación (12-nov-2026).
+drop table if exists public.convivencia;
 create index if not exists excusas_inst on public.excusas (inst_id, desde);
-create index if not exists convivencia_inst on public.convivencia (inst_id, fecha desc);
 alter table public.excusas enable row level security;
-alter table public.convivencia enable row level security;
 drop policy if exists "excusas_coord" on public.excusas;
-drop policy if exists "convivencia_coord" on public.convivencia;
 create policy "excusas_coord" on public.excusas for all to authenticated using (public.es_coord_de(inst_id)) with check (public.es_coord_de(inst_id));
-create policy "convivencia_coord" on public.convivencia for all to authenticated using (public.es_coord_de(inst_id)) with check (public.es_coord_de(inst_id));
 
 -- Los docentes solo reciben las fechas de las excusas aprobadas (no el motivo).
 create or replace function public.excusas_aprobadas()
@@ -358,7 +336,19 @@ $$;
 
 revoke all on function public.crear_institucion(text, text, text), public.unirse_institucion(text, text, text), public.excusas_aprobadas() from public, anon;
 grant execute on function public.crear_institucion(text, text, text), public.unirse_institucion(text, text, text), public.excusas_aprobadas() to authenticated;
-revoke all on public.instituciones, public.miembros, public.excusas, public.convivencia from anon;
+revoke all on public.instituciones, public.miembros, public.excusas from anon;
 grant select, update on public.instituciones to authenticated;
 grant select, delete on public.miembros to authenticated;
-grant select, insert, update, delete on public.excusas, public.convivencia to authenticated;
+grant select, insert, update, delete on public.excusas to authenticated;
+
+------------------------------------------------------------------
+-- 9. Sincronización eficiente: la fecha de modificación la pone el servidor,
+--    para que la aplicación descargue solo lo que cambió.
+------------------------------------------------------------------
+create or replace function public.marcar_actualizacion() returns trigger language plpgsql as $$
+begin new.updated_at := now(); return new; end $$;
+drop trigger if exists docs_actualizacion on public.docs;
+create trigger docs_actualizacion before insert or update on public.docs
+  for each row execute function public.marcar_actualizacion();
+create index if not exists docs_usuario_fecha on public.docs (user_id, updated_at);
+create index if not exists docs_col_fecha on public.docs (col, updated_at);

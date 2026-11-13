@@ -243,13 +243,13 @@ const wq={};
 function pend(col,id){const q=wq[col+"/"+id];return q&&(q.t||q.busy);}
 function queueSave(col,id,delay=700){const k=col+"/"+id;const q=wq[k]||(wq[k]={t:null,busy:false,again:false});clearTimeout(q.t);q.t=setTimeout(()=>{q.t=null;flush(col,id);},delay);}
 async function flush(col,id){const k=col+"/"+id,q=wq[k];if(q.busy){q.again=true;return;}q.busy=true;
- try{const d=S[col][id];if(d)await dbSet(col,id,strip(d));else await dbDel(col,id);}catch(e){toast(dbMsg(e),true);}
+ try{const d=S[col][id];if(d)await dbSet(col,id,strip(d));else await dbDel(col,id);guardarCache();}catch(e){toast(dbMsg(e),true);}
  q.busy=false;if(q.again){q.again=false;flush(col,id);}}
 function strip(o){const c={...o};delete c.id;return c;}
-async function put(col,obj){S[col][obj.id]=obj;sched();await dbSet(col,obj.id,strip(obj));}
-async function del(col,id){delete S[col][id];sched();await dbDel(col,id);}
+async function put(col,obj){S[col][obj.id]=obj;sched();await dbSet(col,obj.id,strip(obj));guardarCache();}
+async function del(col,id){delete S[col][id];sched();await dbDel(col,id);guardarCache();}
 let cfgChain=Promise.resolve();
-function saveCfg(patch){const next={...cfg(),...patch};S.cfg=next;sched();cfgChain=cfgChain.then(()=>dbSet("config","config",next)).then(()=>{if(INST.m)return syncMeta();}).catch(e=>{toast(dbMsg(e),true);});return cfgChain;}
+function saveCfg(patch){const next={...cfg(),...patch};S.cfg=next;sched();cfgChain=cfgChain.then(()=>dbSet("config","config",next)).then(()=>{guardarCache();if(INST.m)return syncMeta();}).catch(e=>{toast(dbMsg(e),true);});return cfgChain;}
 
 /* ---------- arranque (Supabase) ---------- */
 let lastLoad=0,loading=false;
@@ -263,20 +263,32 @@ async function boot(){
 }
 let sessInit=false,modoEst=false;
 function setSession(s){const nu=s&&s.user?s.user.id:null;session=s;if(nu===uid&&sessInit)return;sessInit=true;uid=nu;
- AV.loaded=false;AV.urls={};PT.mats=[];PT.pubs=[];INST.m=null;INST.inst=null;INST.exc=[];INST.meta=null;INST.cargado=false;CO.loaded=false;CO.rango=null;
+ lastTs=null;fullAt=0;AV.loaded=false;AV.urls={};PT.mats=[];PT.pubs=[];INST.m=null;INST.inst=null;INST.exc=[];INST.meta=null;INST.cargado=false;CO.loaded=false;CO.rango=null;
  if(!uid){modoEst=false;ready=false;for(const k of Object.keys(COL))S[k]={};S.cfg=null;renderLogin();return;}
  if(s.user.is_anonymous){modoEst=true;loadPortal();return;}
  modoEst=false;
  const u=s.user,md=u.user_metadata||{};const nm=md.full_name||md.name||u.email||"";
  $("#who").innerHTML=`${esc(nm)} · <button class="lnk" data-salir>Salir</button>`;
  document.body.classList.remove("nologin");ready=false;render();loadAll();}
-async function loadAll(){if(loading||!uid)return;loading=true;
- try{const nx={};for(const k of Object.keys(COL))nx[k]={};let cfgD=null,from=0;const step=1000;
-  for(;;){const {data,error}=await sb.from("docs").select("col,id,data").eq("user_id",uid).order("col").order("id").range(from,from+step-1);if(error)throw error;
-   for(const r of data){if(r.col==="config")cfgD=r.data;else if(r.col==="meta")INST.meta=r.data;else if(nx[r.col])nx[r.col][r.id]={...r.data,id:r.id};}
-   if(data.length<step)break;from+=step;}
-  for(const k of Object.keys(COL)){for(const id of Object.keys(wq).filter(x=>x.startsWith(k+"/")).map(x=>x.slice(k.length+1)))if(pend(k,id)){if(S[k][id])nx[k][id]=S[k][id];else delete nx[k][id];}S[k]=nx[k];}
-  S.cfg=cfgD?{..._def,...cfgD}:null;loadErr="";lastLoad=Date.now();ready=true;
+const IDB={db:null,open(){if(this.db)return this.db;this.db=new Promise((res,rej)=>{try{const r=indexedDB.open("aula-docente",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);}catch(e){rej(e);}});return this.db;},
+ async get(k){try{const d=await this.open();return await new Promise((res,rej)=>{const t=d.transaction("kv").objectStore("kv").get(k);t.onsuccess=()=>res(t.result);t.onerror=()=>rej(t.error);});}catch(e){return null;}},
+ async set(k,v){try{const d=await this.open();await new Promise((res,rej)=>{const t=d.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error);});}catch(e){}},
+ async del(k){try{const d=await this.open();await new Promise(res=>{const t=d.transaction("kv","readwrite");t.objectStore("kv").delete(k);t.oncomplete=res;t.onerror=res;});}catch(e){}}};
+let lastTs=null,fullAt=0,cacheT=null;
+function guardarCache(){if(!uid||modoEst)return;clearTimeout(cacheT);cacheT=setTimeout(()=>{const s={};for(const k of Object.keys(COL))s[k]=S[k];IDB.set("cache_"+uid,{v:1,S:s,cfg:S.cfg,meta:INST.meta,ts:lastTs,fullAt});},1500);}
+const menos2=t=>new Date(new Date(t).getTime()-120000).toISOString();
+async function loadAll(forzarFull){if(loading||!uid)return;loading=true;
+ try{
+  if(!ready&&!forzarFull&&!lastTs){const c=await IDB.get("cache_"+uid);if(c&&c.v===1&&c.ts){for(const k of Object.keys(COL))S[k]=c.S[k]||{};S.cfg=c.cfg;INST.meta=c.meta||null;lastTs=c.ts;fullAt=c.fullAt||0;ready=true;sched();}}
+  const full=forzarFull||!lastTs||Date.now()-fullAt>86400000;
+  const rows=await pag(()=>{let q=sb.from("docs").select("col,id,data,updated_at").eq("user_id",uid);if(!full)q=q.gt("updated_at",menos2(lastTs));return q.order("updated_at").order("id");});
+  let ts=full?null:lastTs;for(const r of rows)if(r.updated_at&&(!ts||r.updated_at>ts))ts=r.updated_at;
+  if(full){const nx={};for(const k of Object.keys(COL))nx[k]={};let cfgD=null;
+   for(const r of rows){if(r.col==="config")cfgD=r.data;else if(r.col==="meta")INST.meta=r.data;else if(nx[r.col])nx[r.col][r.id]={...r.data,id:r.id};}
+   for(const k of Object.keys(COL)){for(const id of Object.keys(wq).filter(x=>x.startsWith(k+"/")).map(x=>x.slice(k.length+1)))if(pend(k,id)){if(S[k][id])nx[k][id]=S[k][id];else delete nx[k][id];}S[k]=nx[k];}
+   S.cfg=cfgD?{..._def,...cfgD}:null;fullAt=Date.now();}
+  else for(const r of rows){if(r.col==="config"){S.cfg={..._def,...r.data};}else if(r.col==="meta")INST.meta=r.data;else if(S[r.col]&&!pend(r.col,r.id))S[r.col][r.id]={...r.data,id:r.id};}
+  lastTs=ts||lastTs||new Date().toISOString();loadErr="";lastLoad=Date.now();ready=true;guardarCache();
  }catch(e){loadErr=dbMsg(e);ready=true;}
  loading=false;sched();if(!modoEst)loadInst();}
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&uid&&Date.now()-lastLoad>30000)loadAll();});
@@ -300,7 +312,7 @@ function renderLogin(){document.body.classList.add("nologin");$("#who").textCont
  $("#lg_rec").onclick=async()=>{const e=$("#lg_e").value.trim();if(!e)return msg("Escribe tu correo arriba.",true);const {error}=await sb.auth.resetPasswordForEmail(e,{redirectTo:back});msg(error?error.message:"Te enviamos un correo para restablecer la contraseña.",!!error);};
 }
 function formNuevaClave(){openModal(`<div class="hd"><h3>Nueva contraseña</h3><button class="x" data-close>×</button></div><label class="f">Nueva contraseña (mínimo 8 caracteres)<input type="password" id="nc_p" autocomplete="new-password"></label><div class="ft"><button class="btn pri" id="nc_ok">Guardar</button></div>`,sh=>{$("#nc_ok",sh).onclick=async()=>{const p=$("#nc_p").value;if(p.length<8)return toast("Mínimo 8 caracteres.",true);const {error}=await sb.auth.updateUser({password:p});if(error)return toast(error.message,true);closeModal();toast("Contraseña actualizada");};});}
-$("#who").addEventListener("click",async e=>{if(e.target.dataset.salir==null)return;if(!await ask(modoEst?"Si sales, tu nombre seguirá vinculado a este dispositivo y para volver a entrar tu docente tendrá que liberarlo. ¿Salir de todos modos?":"¿Cerrar la sesión en este dispositivo?","Salir"))return;driveTok=null;await sb.auth.signOut();});
+$("#who").addEventListener("click",async e=>{if(e.target.dataset.salir==null)return;if(!await ask(modoEst?"Si sales, tu nombre seguirá vinculado a este dispositivo y para volver a entrar tu docente tendrá que liberarlo. ¿Salir de todos modos?":"¿Cerrar la sesión en este dispositivo?","Salir"))return;driveTok=null;if(uid)await IDB.del("cache_"+uid);lastTs=null;fullAt=0;await sb.auth.signOut();});
 let instEv=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();instEv=e;sched();});
 window.addEventListener("appinstalled",()=>{instEv=null;toast("Aplicación instalada");sched();});
 if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
@@ -438,7 +450,7 @@ async function bulk(op){const ids=[...UI.sel].filter(id=>S.ests[id]);if(!ids.len
  const act=op==="bReact";if(!await ask(`¿${act?"Reactivar a":"Marcar como retirados a"} ${ids.length} estudiante(s)?${act?"":" Dejan de aparecer en listas, notas y asistencia; su historial se conserva."}`,act?"Reactivar":"Retirar"))return;
  try{for(const id of ids)await put("ests",{...S.ests[id],activo:act});if(!act){await sb.from("matriculas").delete().eq("teacher_id",uid).in("est_id",ids);AV.loaded=false;}UI.sel.clear();toast("Listo");}catch(e){toast(dbMsg(e),true);}renderMain();}
 
-async function resizeImg(file,size=260){return new Promise((res,rej)=>{const url=URL.createObjectURL(file);const img=new Image();img.onload=()=>{const s=Math.min(img.width,img.height);const sx=(img.width-s)/2,sy=(img.height-s)*0.3;const c=document.createElement("canvas");c.width=c.height=size;c.getContext("2d").drawImage(img,sx,sy,s,s,0,0,size,size);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.82));};img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("img"));};img.src=url;});}
+async function resizeImg(file,size=200){return new Promise((res,rej)=>{const url=URL.createObjectURL(file);const img=new Image();img.onload=()=>{const s=Math.min(img.width,img.height);const sx=(img.width-s)/2,sy=(img.height-s)*0.3;const c=document.createElement("canvas");c.width=c.height=size;c.getContext("2d").drawImage(img,sx,sy,s,s,0,0,size,size);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.72));};img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("img"));};img.src=url;});}
 
 function formEst(e,cursoDef){
  const nuevo=!e;e=e||{id:nid(),cursoId:cursoDef||ctx.c,activo:true,tipoDoc:"TI"};let foto=e.foto||"";
@@ -682,7 +694,7 @@ function vAjustes(){
  ${cardInstitucion()}
  <div class="card"><h3>Instalar en el dispositivo</h3><div class="sm mut">${instEv?"Este navegador permite instalar Aula Docente como aplicación, con su propio ícono.":window.matchMedia("(display-mode: standalone)").matches?"Ya estás usando la aplicación instalada.":"En Android abre esta página en Chrome y elige ⋮ → Instalar aplicación. En iPhone, en Safari: Compartir → Agregar a inicio."}</div>${instEv?`<div class="row" style="margin-top:8px"><button class="btn sm pri" data-go="instalar">Instalar aplicación</button></div>`:""}</div>
  <div class="card"><h3>Google Drive</h3><div class="sm">${c.drive&&c.drive.rootId?`Carpeta principal creada. <a href="https://drive.google.com/drive/folders/${esc(c.drive.rootId)}" target="_blank" rel="noopener">Abrir en Drive</a> · ${Object.keys(c.drive.carpetas||{}).length} subcarpeta(s) por curso y asignatura.`:"La carpeta se crea automáticamente con la primera evidencia que subas."}</div><div class="row" style="margin-top:8px">${driveOn()?`<button class="btn sm" data-go="probarDrive">Conectar y crear carpeta</button>`:`<span class="mut sm">Google Drive no está configurado (falta GOOGLE_CLIENT_ID en config.js).</span>`}${c.drive&&c.drive.rootId?`<button class="btn sm dan" data-go="resetDrive">Olvidar carpetas</button>`:""}</div></div>
- <div class="card"><h3>Copia de seguridad</h3><div class="sm mut">Descarga todos tus registros (incluidas las fotografías) en un archivo .json o restaura uno anterior.</div><div class="row" style="margin-top:8px">${downloads?`<button class="btn sm" data-go="backup">Descargar copia</button>`:""}<label class="btn sm">Restaurar copia<input type="file" accept=".json,application/json" id="restore" hidden></label></div></div>`;
+ <div class="card"><h3>Copia de seguridad</h3><div class="sm mut">Descarga todos tus registros (incluidas las fotografías) en un archivo .json o restaura uno anterior.</div><div class="row" style="margin-top:8px">${downloads?`<button class="btn sm" data-go="backup">Descargar copia</button>`:""}<label class="btn sm">Restaurar copia<input type="file" accept=".json,application/json" id="restore" hidden></label><button class="btn sm" data-go="syncFull">Recargar todo desde el servidor</button></div></div>`;
 }
 function rowsEd(rows,fields,newRow){
  const id="re"+nid();
@@ -789,6 +801,7 @@ $("#main").addEventListener("click",async e=>{
   case"datos":return formDatos();case"curso":return formCurso();case"asig":return formAsig();
   case"est":if(!cursosArr().length)return toast("Primero crea un curso.",true);return formEst(null);
   case"imp":return importar();
+  case"syncFull":toast("Recargando…");return loadAll(true);
   case"unirInst":return unirInst();
   case"crearInst":return crearInst();
   case"salirInst":return salirInst();
@@ -814,14 +827,13 @@ $("#main").addEventListener("click",async e=>{
   case"resetDrive":{if(await ask("La app dejará de usar las carpetas actuales y creará unas nuevas con la próxima evidencia. Tus archivos en Drive no se borran. ¿Continuar?","Continuar"))saveCfg({drive:{rootId:"",carpetas:{}}});return;}
  }
 });
-$("#main").addEventListener("input",e=>{if(e.target.id==="q"){UI.q=e.target.value;renderEstList();}if(e.target.id==="co_q"){CO.q=e.target.value;clearTimeout(CO._t);CO._t=setTimeout(()=>{const pos=e.target.selectionStart;renderMain();const n=$("#co_q");if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(x){}}},350);}});
+$("#main").addEventListener("input",e=>{if(e.target.id==="q"){UI.q=e.target.value;renderEstList();}});
 $("#main").addEventListener("change",e=>{
  const t=e.target;
  if(t.id==="co_f"){CO.f=t.value||hoy();t.blur();return renderMain();}
  if(t.id==="co_cur"){CO.curso=t.value;return renderMain();}
  if(t.id==="co_d"||t.id==="co_h"){CO[t.id==="co_d"?"desde":"hasta"]=t.value;t.blur();return renderMain();}
  if(t.id==="co_est"){CO.estado=t.value;return renderMain();}
- if(t.id==="co_cla"){CO.clase=t.value;return renderMain();}
  if(t.id==="fCur"){UI.cursoFiltro=t.value;renderEstList();return;}
  if(t.id==="restore"){const f=t.files[0];t.value="";if(f)restaurar(f);return;}
  if(t.id==="showComp"){UI.showComp=t.checked;renderMain();return;}
@@ -986,7 +998,7 @@ function formPub(p){
   $("#p_alg",sh).onchange=e=>{$("#p_es").style.display=e.target.checked?"":"none";};
   sh.addEventListener("click",e=>{const g=e.target.dataset.grado;if(g!=null){for(const i of $$("#p_cl input")){const x=cs.find(c=>c.k===i.value);if(x&&x.grado===g)i.checked=true;}pintaEst();}
    const r=e.target.dataset.rmf;if(r!=null){const f=archivos.splice(+r,1)[0];if(f&&f.path)quitar.push(f.path);pintaArch();}});
-  $("#p_fi",sh).onchange=e=>{for(const f of e.target.files){if(f.size>50*1024*1024){toast(`“${f.name}” supera 50 MB.`,true);continue;}nuevos.push(f);}e.target.value="";$("#p_sel").textContent=nuevos.length?nuevos.length+" por subir: "+nuevos.map(f=>f.name).join(", "):"";};
+  $("#p_fi",sh).onchange=e=>{for(const f of e.target.files){if(f.size>10*1024*1024){toast(`“${f.name}” supera 10 MB. Súbelo a Google Drive y comparte el enlace.`,true);continue;}nuevos.push(f);}e.target.value="";$("#p_sel").textContent=nuevos.length?nuevos.length+" por subir: "+nuevos.map(f=>f.name).join(", "):"";};
   $("#p_ok",sh).onclick=async ev=>{const titulo=$("#p_t").value.trim(),cuerpo=$("#p_c").value.trim(),clases=selCl();const est_ids=$("#p_alg").checked?$$("#p_es input:checked").map(i=>i.value):[];
    if(!titulo)return toast("Escribe un título.",true);if(!clases.length)return toast("Elige al menos una clase destinataria.",true);if($("#p_alg").checked&&!est_ids.length)return toast("Marca los estudiantes o desactiva “Solo para algunos estudiantes”.",true);
    ev.target.disabled=true;const prog=$("#p_prog");prog.innerHTML="";
@@ -1187,21 +1199,27 @@ async function salirInst(){if(!await ask(esCoord()?"Si sales, dejarás de tener 
  const {error}=await sb.from("miembros").delete().eq("user_id",uid);if(error)return toast(dbMsg(error),true);INST.m=null;INST.inst=null;INST.exc=[];CO.loaded=false;toast("Saliste de la institución");if(location.hash==="#coord")location.hash="semana";else sched();}
 
 /* ---------- COORDINACIÓN ---------- */
-const CO={tab:"hoy",loaded:false,loading:false,err:"",T:{},cursos:{},ref:{},asis:[],rango:null,miembros:[],exc:[],conv:[],upd:0,f:hoy(),desde:"",hasta:hoy(),curso:"",q:"",estado:"",clase:""};
-const CLASES={observacion:"Observación general",tipo1:"Situación tipo I",tipo2:"Situación tipo II",tipo3:"Situación tipo III"};
-const REMISION=["Ninguna","Comité Escolar de Convivencia","Orientación escolar","Rectoría","ICBF / Comisaría de Familia","Policía de Infancia y Adolescencia","Sector salud","Otra"];
+const CO={tab:"hoy",loaded:false,loading:false,err:"",T:{},cursos:{},ref:{},asis:[],asisMap:{},asisTs:null,base:null,baseAt:0,rango:null,miembros:[],exc:[],upd:0,f:hoy(),desde:"",hasta:hoy(),curso:"",q:"",estado:"",clase:""};
 async function pag(q){let out=[],from=0;for(;;){const {data,error}=await q().range(from,from+999);if(error)throw error;out=out.concat(data||[]);if(!data||data.length<1000)break;from+=1000;}return out;}
 async function loadCoord(desde,hasta,forzar){
- if(!INST.m)return;if(CO.loading)return;
- const necesita=forzar||!CO.loaded||!CO.rango||desde<CO.rango[0]||hasta>CO.rango[1]||(hasta>=hoy()&&Date.now()-CO.upd>60000);
- if(!necesita)return;CO.loading=true;
+ if(!INST.m||CO.loading)return;
+ const dentro=!!CO.rango&&desde>=CO.rango[0]&&hasta<=CO.rango[1];
+ const viejo=hasta>=hoy()&&Date.now()-CO.upd>60000;
+ if(CO.loaded&&dentro&&!forzar&&!viejo)return;
+ CO.loading=true;
  try{const inst=INST.m.inst_id;
-  const [base,asis,mi,ex,cv]=await Promise.all([
-   pag(()=>sb.from("docs").select("user_id,col,id,data").in("col",["ests","cursos","asigs","meta"]).order("id")),
-   pag(()=>sb.from("docs").select("user_id,id,data").eq("col","asis").gte("data->>fecha",desde).lte("data->>fecha",hasta).order("id")),
-   sb.from("miembros").select("*").eq("inst_id",inst),sb.from("excusas").select("*").eq("inst_id",inst).order("desde",{ascending:false}),sb.from("convivencia").select("*").eq("inst_id",inst).order("fecha",{ascending:false})]);
-  for(const r of [mi,ex,cv])if(r.error)throw r.error;
-  CO.miembros=mi.data;CO.exc=ex.data;CO.conv=cv.data;CO.asis=asis;CO.rango=[desde,hasta];modeloCoord(base);CO.err="";CO.upd=Date.now();
+  if(!CO.base||Date.now()-CO.baseAt>600000){
+   const [peq,ests]=await Promise.all([
+    pag(()=>sb.from("docs").select("user_id,col,id,data").in("col",["cursos","asigs","meta"]).order("id")),
+    pag(()=>sb.from("docs").select("user_id,col,id,apellidos:data->>apellidos,nombres:data->>nombres,documento:data->>documento,cursoId:data->>cursoId,activo:data->activo,acudiente:data->>acudiente,telefono:data->>telefono").eq("col","ests").order("id"))]);
+   CO.base=peq.concat(ests.map(r=>({user_id:r.user_id,col:"ests",id:r.id,data:r.data?{...r.data,foto:""}:{apellidos:r.apellidos,nombres:r.nombres,documento:r.documento,cursoId:r.cursoId,activo:r.activo,acudiente:r.acudiente,telefono:r.telefono}})));
+   CO.baseAt=Date.now();modeloCoord(CO.base);}
+  if(!dentro){const a=await pag(()=>sb.from("docs").select("user_id,id,data,updated_at").eq("col","asis").gte("data->>fecha",desde).lte("data->>fecha",hasta).order("id"));CO.asisMap={};CO.asisTs=null;for(const r of a)CO.asisMap[r.user_id+"|"+r.id]=r;CO.rango=[desde,hasta];CO.asisTs=a.reduce((m,r)=>r.updated_at&&(!m||r.updated_at>m)?r.updated_at:m,null);}
+  else{const a=await pag(()=>{let q=sb.from("docs").select("user_id,id,data,updated_at").eq("col","asis").gte("data->>fecha",CO.rango[0]).lte("data->>fecha",CO.rango[1]);if(CO.asisTs)q=q.gt("updated_at",menos2(CO.asisTs));return q.order("updated_at").order("id");});for(const r of a){CO.asisMap[r.user_id+"|"+r.id]=r;if(r.updated_at&&(!CO.asisTs||r.updated_at>CO.asisTs))CO.asisTs=r.updated_at;}}
+  CO.asis=Object.values(CO.asisMap);
+  const [mi,ex]=await Promise.all([sb.from("miembros").select("*").eq("inst_id",inst),sb.from("excusas").select("*").eq("inst_id",inst).order("desde",{ascending:false})]);
+  for(const r of [mi,ex])if(r.error)throw r.error;
+  CO.miembros=mi.data;CO.exc=ex.data;CO.err="";CO.upd=Date.now();
  }catch(e){CO.err=avErr(e);}
  CO.loaded=true;CO.loading=false;if(UI.view==="coord")sched();}
 function modeloCoord(base){
@@ -1232,7 +1250,7 @@ function inicioTrim(){const p=periodoDeFecha(hoy());return p&&p.inicio?p.inicio:
 function vCoord(){
  if(!INST.cargado)return `<div class="load">Cargando…</div>`;
  if(!esCoord())return `<h2>Coordinación</h2><div class="card empty">Este módulo es solo para coordinación. ${INST.m?"":"Si eres coordinador(a), crea la institución o únete con el código de coordinación en Ajustes."}<div style="margin-top:10px"><a class="btn pri" href="#ajustes">Ir a Ajustes</a></div></div>`;
- const tabs=[["hoy","Hoy"],["cons","Consolidado"],["alertas","Alertas"],["excusas","Excusas"],["obs","Observador"],["inst","Institución"]];
+ const tabs=[["hoy","Hoy"],["cons","Consolidado"],["alertas","Alertas"],["excusas","Excusas"],["inst","Institución"]];
  let rng;if(CO.tab==="hoy")rng=[CO.f,CO.f];else if(CO.tab==="cons"){if(!CO.desde)CO.desde=inicioTrim();rng=[CO.desde,CO.hasta];}else if(CO.tab==="alertas")rng=[inicioTrim(),hoy()];else rng=[hoy(),hoy()];
  loadCoord(rng[0],rng[1]);
  let h=`<div class="row" style="margin-bottom:8px"><h2 style="margin:0" class="sp">Coordinación</h2><span class="mut sm">${esc((INST.inst||{}).nombre||"")}</span></div>
@@ -1241,7 +1259,7 @@ function vCoord(){
  if(!CO.loaded)return h+`<div class="load" style="min-height:30vh">Cargando información de la institución…</div>`;
  const nd=new Set(CO.miembros.filter(m=>m.rol==="docente"||CO.T[m.user_id]).map(m=>m.user_id)).size;
  if(!nd&&CO.tab!=="inst")h+=`<div class="banner i">Aún no hay docentes unidos. Compárteles el código de docentes que está en la pestaña Institución.</div>`;
- h+={hoy:coHoy,cons:coCons,alertas:coAlertas,excusas:coExcusas,obs:coObs,inst:coInst}[CO.tab]();
+ h+=({hoy:coHoy,cons:coCons,alertas:coAlertas,excusas:coExcusas,inst:coInst}[CO.tab]||coHoy)();
  return h;}
 function filtroCurso(){return `<select id="co_cur" style="flex:1 1 160px"><option value="">Todos los cursos</option>${cursosCo().map(c=>`<option value="${esc(c.n)}" ${c.n===CO.curso?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select>`;}
 function coHoy(){
@@ -1287,7 +1305,7 @@ function coAlertas(){const {out,lim,ale,con}=calcAlertas();
  let h=`<div class="banner i sm">Desde ${fFecha(inicioTrim())} hasta hoy, con base en las fallas sin excusa sobre las clases registradas. Crítico: ${lim}% o más (límite del SIEE). Atención: ${ale}% o más. Los porcentajes se evalúan desde 5 clases registradas. También se alerta a quien lleva ${con} o más días seguidos sin asistir. <button class="lnk sm" data-co="params">Cambiar parámetros</button></div>`;
  if(!out.length)return h+`<div class="card empty">No hay estudiantes en alerta.</div>`;
  return h+`<div class="card"><div class="list">${out.map(a=>`<div class="it"><div class="nm"><b>${esc(a.r.cl.nombre)}</b><span class="mut sm">Curso ${esc(a.r.cl.cursoNombre)} · ${a.r.falta} falta(s) sin excusa de ${a.r.ses} clases (${Math.round(a.pf)}%)${a.racha?` · ${a.racha} día(s) seguidos sin asistir`:""}</span><div style="margin-top:3px"><span class="tag ${a.nivel==="crit"?"bad":"warn"}">${a.nivel==="crit"?"Crítico":a.nivel==="aten"?"Atención":"Ausencia continua"}</span></div></div>
-  <div class="row" style="gap:4px;flex-direction:column;align-items:stretch"><button class="btn sm" data-co="excusa" data-k="${esc(a.r.cl.curso+"|"+a.r.cl.k)}">Excusa</button><button class="btn sm" data-co="anotar" data-k="${esc(a.r.cl.curso+"|"+a.r.cl.k)}">Observador</button></div></div>`).join("")}</div></div>`;}
+  <div class="row" style="gap:4px;flex-direction:column;align-items:stretch"><button class="btn sm" data-co="excusa" data-k="${esc(a.r.cl.curso+"|"+a.r.cl.k)}">Excusa</button></div></div>`).join("")}</div></div>`;}
 function clDe(key){const [cn,k]=String(key||"").split("|");const cu=CO.cursos[cn];return cu?cu.est.find(c=>c.k===k)||null:null;}
 function coExcusas(){let ex=CO.exc.filter(x=>(!CO.curso||x.curso===CO.curso)&&(!CO.estado||x.estado===CO.estado));
  const cn=c=>(CO.cursos[c]||{}).nombre||c;
@@ -1310,40 +1328,12 @@ function formExcusa(x,key){if(!cursosCo().length)return toast("Aún no hay curso
    const {curso_nombre,...e2}=est;const row={...e2,desde:d,hasta:hh,motivo:$("#ex_m").value.trim(),soporte:$("#ex_s").value.trim(),estado:$("#ex_e").value,updated_at:new Date().toISOString()};
    const {error}=nuevo?await sb.from("excusas").insert({...row,inst_id:INST.m.inst_id}):await sb.from("excusas").update(row).eq("id",x.id);if(error)return toast(avErr(error),true);closeModal();toast("Excusa guardada");await loadCoord(CO.rango[0],CO.rango[1],true);};
   if($("#ex_del",sh))$("#ex_del",sh).onclick=async()=>{if(!await ask("¿Eliminar esta excusa? Las faltas volverán a contar sin justificar.","Eliminar",true))return;const {error}=await sb.from("excusas").delete().eq("id",x.id);if(error)return toast(avErr(error),true);closeModal();await loadCoord(CO.rango[0],CO.rango[1],true);};});}
-function coObs(){const q=norm(CO.q);let L=CO.conv.filter(x=>(!CO.curso||x.curso===CO.curso)&&(!CO.clase||x.clase===CO.clase)&&(!CO.estado||x.estado===CO.estado)&&(!q||norm(x.est_nombre).includes(q)));
- return `<div class="row" style="margin-bottom:8px">${filtroCurso()}<select id="co_cla" style="flex:0 1 170px"><option value="">Todos los tipos</option>${Object.entries(CLASES).map(([k,l])=>`<option value="${k}" ${CO.clase===k?"selected":""}>${l}</option>`).join("")}</select><select id="co_est" style="flex:0 1 130px"><option value="">Todos</option><option value="abierto" ${CO.estado==="abierto"?"selected":""}>Abiertos</option><option value="cerrado" ${CO.estado==="cerrado"?"selected":""}>Cerrados</option></select></div>
- <div class="row" style="margin-bottom:10px"><input type="search" id="co_q" placeholder="Buscar estudiante" value="${esc(CO.q)}" style="flex:1 1 160px"><button class="btn pri" data-co="anotar">+ Nueva anotación</button>${L.length?`<button class="btn sm" data-co="csvObs">CSV</button>`:""}</div>
- <div class="mut sm" style="margin-bottom:8px">Registro del observador y de situaciones de convivencia (Ley 1620 de 2013 y Decreto 1965 de 2013). Solo lo ve la coordinación.</div>
- ${L.length?L.map(x=>`<div class="card"><div class="row"><div class="sp"><b>${esc(x.est_nombre)}</b><div class="mut sm">Curso ${esc(x.curso_nombre||x.curso)} · ${fFecha(x.fecha)}</div></div><span class="tag ${x.clase==="tipo3"?"bad":x.clase==="tipo2"?"warn":x.clase==="tipo1"?"mk2":""}">${esc(CLASES[x.clase])}</span><span class="tag ${x.estado==="abierto"?"warn":"ok"}">${x.estado==="abierto"?"Abierto":"Cerrado"}</span></div>
-  <div class="sm" style="margin-top:6px">${textoHTML(x.descripcion)}</div>${x.acciones?`<div class="sm" style="margin-top:4px"><b>Acciones:</b> ${textoHTML(x.acciones)}</div>`:""}${x.compromisos?`<div class="sm" style="margin-top:4px"><b>Compromisos:</b> ${textoHTML(x.compromisos)}</div>`:""}${x.remision&&x.remision!=="Ninguna"?`<div class="sm" style="margin-top:4px"><b>Remisión:</b> ${esc(x.remision)}</div>`:""}${x.seguimiento?`<div class="sm" style="margin-top:4px"><b>Seguimiento:</b> ${textoHTML(x.seguimiento)}</div>`:""}
-  <div class="row" style="margin-top:8px"><button class="btn sm" data-co="editObs" data-id="${x.id}">Editar o hacer seguimiento</button><button class="btn sm" data-co="histObs" data-k="${esc(x.curso+"|"+x.est_key)}">Historial del estudiante</button></div></div>`).join(""):`<div class="card empty">No hay anotaciones${CO.q||CO.curso||CO.clase||CO.estado?" con estos filtros":""}.</div>`}`;}
-function formObs(x,key){if(!cursosCo().length)return toast("Aún no hay cursos de docentes unidos.",true);const nuevo=!x;x=x||{fecha:hoy(),clase:"observacion",estado:"abierto",descripcion:"",acciones:"",compromisos:"",remision:"Ninguna",seguimiento:""};
- openModal(`<div class="hd"><h3>${nuevo?"Nueva anotación":"Editar anotación"}</h3><button class="x" data-close>×</button></div>${pickerHTML("ob",x.curso?x.curso+"|"+x.est_key:key)}
- <div class="f2"><label class="f">Fecha<input type="date" id="ob_f" value="${esc(x.fecha)}"></label><label class="f">Tipo<select id="ob_t">${Object.entries(CLASES).map(([k,l])=>`<option value="${k}" ${x.clase===k?"selected":""}>${l}</option>`).join("")}</select></label></div>
- <div class="mut sm" id="ob_ay" style="margin:-4px 0 8px"></div>
- <label class="f">Descripción de los hechos<textarea id="ob_d" style="min-height:90px">${esc(x.descripcion)}</textarea></label>
- <label class="f">Acciones realizadas o ruta de atención<textarea id="ob_a">${esc(x.acciones)}</textarea></label>
- <label class="f">Compromisos<textarea id="ob_c">${esc(x.compromisos)}</textarea></label>
- <div class="f2"><label class="f">Remisión<select id="ob_r">${REMISION.map(r=>`<option ${x.remision===r?"selected":""}>${r}</option>`).join("")}</select></label><label class="f">Estado<select id="ob_e"><option value="abierto" ${x.estado==="abierto"?"selected":""}>Abierto</option><option value="cerrado" ${x.estado==="cerrado"?"selected":""}>Cerrado</option></select></label></div>
- <label class="f">Seguimiento<textarea id="ob_s" placeholder="Fecha y resultado de cada seguimiento">${esc(x.seguimiento)}</textarea></label>
- <div class="ft">${nuevo?"":`<button class="btn dan" id="ob_del">Eliminar</button><span class="sp"></span>`}<button class="btn pri" id="ob_ok">Guardar</button></div>`,sh=>{montarPicker(sh,"ob");
-  const AY={observacion:"Anotación general del observador (positiva o por atender).",tipo1:"Tipo I: conflictos manejados inadecuadamente y situaciones esporádicas que no generan daños al cuerpo o a la salud.",tipo2:"Tipo II: agresión escolar, acoso o ciberacoso repetido o sistemático, o que cause daños al cuerpo o a la salud sin incapacidad. Requiere informar a las familias y al Comité Escolar de Convivencia.",tipo3:"Tipo III: agresiones constitutivas de presuntos delitos. Requiere remisión inmediata a la autoridad competente."};
-  const ay=()=>{$("#ob_ay").textContent=AY[$("#ob_t").value];};$("#ob_t",sh).onchange=ay;ay();
-  $("#ob_ok",sh).onclick=async()=>{const est=leerPicker("ob");if(!est)return toast("Elige el estudiante.",true);const d=$("#ob_d").value.trim();if(!d)return toast("Describe la situación.",true);
-   const row={...est,fecha:$("#ob_f").value||hoy(),clase:$("#ob_t").value,descripcion:d,acciones:$("#ob_a").value.trim(),compromisos:$("#ob_c").value.trim(),remision:$("#ob_r").value,estado:$("#ob_e").value,seguimiento:$("#ob_s").value.trim(),updated_at:new Date().toISOString()};
-   const {error}=nuevo?await sb.from("convivencia").insert({...row,inst_id:INST.m.inst_id}):await sb.from("convivencia").update(row).eq("id",x.id);if(error)return toast(avErr(error),true);closeModal();toast("Anotación guardada");await loadCoord(CO.rango[0],CO.rango[1],true);};
-  if($("#ob_del",sh))$("#ob_del",sh).onclick=async()=>{if(!await ask("¿Eliminar esta anotación del observador? No se puede deshacer.","Eliminar",true))return;const {error}=await sb.from("convivencia").delete().eq("id",x.id);if(error)return toast(avErr(error),true);closeModal();await loadCoord(CO.rango[0],CO.rango[1],true);};});}
-function histObs(key){const [cn,k]=key.split("|");const L=CO.conv.filter(x=>x.curso===cn&&x.est_key===k).sort((a,b)=>a.fecha.localeCompare(b.fecha));const cl=clDe(key);
- const ex=CO.exc.filter(x=>x.curso===cn&&x.est_key===k);
- openModal(`<div class="hd"><h3>${esc(cl?cl.nombre:(L[0]||{}).est_nombre||"")}</h3><button class="x" data-close>×</button></div><div class="mut sm" style="margin-bottom:10px">Curso ${esc(cl?cl.cursoNombre:cn)}${cl&&cl.acudiente?" · Acudiente: "+esc(cl.acudiente):""}${cl&&cl.telefono?" · "+esc(cl.telefono):""}</div>
- <h3>Observador</h3>${L.length?L.map(x=>`<div class="pub"><b>${fFecha(x.fecha)} · ${esc(CLASES[x.clase])}</b> <span class="tag ${x.estado==="abierto"?"warn":"ok"}">${x.estado}</span><div class="sm">${textoHTML(x.descripcion)}</div>${x.seguimiento?`<div class="sm mut">Seguimiento: ${textoHTML(x.seguimiento)}</div>`:""}</div>`).join(""):'<div class="mut sm">Sin anotaciones.</div>'}
- <h3 style="margin-top:12px">Excusas</h3>${ex.length?ex.map(x=>`<div class="sm">${fFecha(x.desde)}${x.hasta!==x.desde?" a "+fFecha(x.hasta):""} · ${esc(x.motivo||"")} · ${esc(x.estado)}</div>`).join(""):'<div class="mut sm">Sin excusas.</div>'}
- <div class="ft"><button class="btn pri" id="ho_n">Nueva anotación</button></div>`,sh=>{$("#ho_n",sh).onclick=()=>formObs(null,key);});}
+
 function coInst(){const i=INST.inst||{};const P=i.params||{};const url=appURL();
  const ms=CO.miembros.slice().sort((a,b)=>(a.rol>b.rol?1:-1)||String(a.nombre).localeCompare(String(b.nombre)));
  return `<div class="card"><h3>${esc(i.nombre||"")}</h3>
  <div style="padding:6px 0"><b class="sm">Código para docentes</b><div class="mut sm">Cada docente lo escribe en Ajustes → Institución.</div><div class="row" style="margin-top:6px"><span class="code">${esc(i.codigo_docentes||"")}</span><button class="btn sm" data-co="copInv" data-t="d">Copiar invitación</button></div></div>
- <div style="padding:6px 0"><b class="sm">Código de coordinación</b><div class="mut sm">Solo para otras personas de coordinación: da acceso a excusas y observador.</div><div class="row" style="margin-top:6px"><span class="code">${esc(i.codigo_coord||"")}</span><button class="btn sm" data-co="copInv" data-t="c">Copiar</button></div></div>
+ <div style="padding:6px 0"><b class="sm">Código de coordinación</b><div class="mut sm">Solo para otras personas de coordinación: da acceso a excusas y alertas.</div><div class="row" style="margin-top:6px"><span class="code">${esc(i.codigo_coord||"")}</span><button class="btn sm" data-co="copInv" data-t="c">Copiar</button></div></div>
  <div class="row" style="margin-top:6px"><button class="btn sm" data-co="regen">Cambiar códigos</button><button class="btn sm" data-co="params">Parámetros de alertas</button></div>
  <div class="mut sm" style="margin-top:6px">Alertas: crítico ${esc(P.limite||25)}% · atención ${esc(P.alerta||15)}% · ${esc(P.consecutivos||3)} días seguidos.</div></div>
  <div class="card"><h3>Miembros (${ms.length})</h3><div class="list">${ms.map(m=>`<div class="it"><div class="nm"><b>${esc(m.nombre||m.email||"Sin nombre")}</b><span class="mut sm">${m.rol==="coordinador"?"Coordinación":"Docente"}${m.email?" · "+esc(m.email):""} · desde ${fLoc(m.created_at)}</span></div>${m.user_id!==uid?`<button class="btn sm dan" data-co="quitarM" data-id="${m.user_id}">Quitar</button>`:'<span class="tag">Tú</span>'}</div>`).join("")}</div></div>
@@ -1359,13 +1349,9 @@ async function accionCo(op,el){
   case"excusa":return formExcusa(null,el.dataset.k);
   case"editExc":return formExcusa(CO.exc.find(x=>x.id===el.dataset.id));
   case"aprobar":case"rechazar":{const {error}=await sb.from("excusas").update({estado:op==="aprobar"?"aprobada":"rechazada",updated_at:new Date().toISOString()}).eq("id",el.dataset.id);if(error)return toast(avErr(error),true);toast(op==="aprobar"?"Excusa aprobada":"Excusa rechazada");return loadCoord(r[0],r[1],true);}
-  case"anotar":return formObs(null,el.dataset.k);
-  case"editObs":return formObs(CO.conv.find(x=>x.id===el.dataset.id));
-  case"histObs":return histObs(el.dataset.k);
   case"csvCons":{const {pe,cs,marcas}=CO._cons;const rows=[["Curso","Estudiante","Clases","Fallas","Justificadas","Tardes","% asistencia","Días sin asistir",...marcas]];
    for(const cu of cs)for(const cl of cu.est){const x=pe.get(cl);if(!x)continue;rows.push([cu.nombre,cl.nombre,x.ses,x.falta,x.just,x.tarde,x.pct==null?"":x.pct,x.diasAus,...marcas.map(m=>x.marcas[m]||0)]);}
    return bajar(`Consolidado_institucional_${CO.desde}_${CO.hasta}.csv`,csv(rows));}
-  case"csvObs":{const rows=[["Fecha","Curso","Estudiante","Tipo","Estado","Descripción","Acciones","Compromisos","Remisión","Seguimiento"]];for(const x of CO.conv)rows.push([x.fecha,x.curso_nombre||x.curso,x.est_nombre,CLASES[x.clase],x.estado,x.descripcion,x.acciones,x.compromisos,x.remision,x.seguimiento]);return bajar(`Observador_${hoy()}.csv`,csv(rows));}
   case"copInv":{const i=INST.inst||{};return copiar(el.dataset.t==="d"?`Únete a ${i.nombre} en Aula Docente para que coordinación pueda consultar la asistencia de tus clases:\n1. Abre ${appURL()} e ingresa con tu cuenta.\n2. Ve a Ajustes → Institución.\n3. Escribe el código ${i.codigo_docentes}.`:i.codigo_coord);}
   case"regen":{if(!await ask("Se generarán códigos nuevos. Los miembros actuales siguen dentro; los códigos anteriores dejan de servir. ¿Continuar?","Cambiar"))return;const nc=()=>nuevoCod();const {error}=await sb.from("instituciones").update({codigo_docentes:nc(),codigo_coord:nc()}).eq("id",INST.m.inst_id);if(error)return toast(avErr(error),true);await loadInst();return renderMain();}
   case"params":{const P=(INST.inst||{}).params||{};openModal(`<div class="hd"><h3>Parámetros de alertas</h3><button class="x" data-close>×</button></div><p class="sm mut">Según el SIEE de la institución. Los porcentajes se calculan sobre las clases registradas en el periodo.</p>
