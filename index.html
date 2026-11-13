@@ -170,6 +170,7 @@ body.nologin #gear{display:none}
 .rows input[type=color]{padding:2px;height:34px;cursor:pointer}
 .stt{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:12px 0}.stt div{border:1px solid var(--line);border-radius:10px;padding:8px 10px}.stt b{display:block;font-size:20px}.stt span{font-size:12px;color:var(--mut)}
 .pie path:hover,.pie circle:hover{opacity:.85}
+.mrc{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}.mb{border:1px solid var(--line);background:#fff;border-radius:20px;padding:2px 9px;font-size:11.5px;cursor:pointer;color:var(--mut)}.mb.on{background:#6c3483;border-color:#6c3483;color:#fff;font-weight:600}
 .load{display:flex;align-items:center;justify-content:center;min-height:50vh;color:var(--mut);flex-direction:column;gap:8px;text-align:center;padding:20px}
 </style>
 </head>
@@ -224,6 +225,7 @@ function DEF(){const y=new Date().getFullYear();return{docente:"",institucion:""
  escala:{min:1,max:5,aprob:3,dec:1,desempenos:[{nombre:"Bajo",desde:1,hasta:2.9,color:"#c0392b"},{nombre:"Básico",desde:3,hasta:3.9,color:"#d68910"},{nombre:"Alto",desde:4,hasta:4.5,color:"#2e86c1"},{nombre:"Superior",desde:4.6,hasta:5,color:"#1e8449"}]},
  plantilla:[{id:"act",nombre:"Actividades",peso:70},{id:"evt",nombre:"Evaluación trimestral",peso:20},{id:"aut",nombre:"Autoevaluación",peso:10}],
  codigos:[{c:"P",nombre:"Presente",tipo:"presente"},{c:"A",nombre:"Falta",tipo:"falta"},{c:"T",nombre:"Llegada tarde",tipo:"tarde"},{c:"E",nombre:"Falta con excusa",tipo:"justificada"}],
+ marcas:[{c:"SU",nombre:"Sin uniforme"},{c:"EU",nombre:"Excusa de uniforme"}],
  drive:{rootId:"",carpetas:{}}};}
 const _def=DEF();
 const cfg=()=>S.cfg||_def;
@@ -350,6 +352,8 @@ const desTag=n=>{const d=nivelDe(n);return d?`<span class="dtag"><i style="backg
 const aprueba=n=>n==null?null:rnd(n)>=+cfg().escala.aprob;
 const codTipo=c=>((cfg().codigos.find(x=>x.c===c))||{}).tipo||"registro";
 const asisKey=(cid,aid,f)=>`${cid}__${aid}__${f}`;
+const marcasCfg=()=>Array.isArray(cfg().marcas)?cfg().marcas:_def.marcas;
+function resMarcas(eid,cid,aid,pid){const r={};for(const d of Object.values(S.asis)){if(d.cursoId!==cid||d.asigId!==aid||(pid&&d.perId!==pid))continue;const m=(d.extra||{})[eid];if(m)r[m]=(r[m]||0)+1;}return r;}
 function resAsis(eid,cid,aid,pid){const r={ses:0,falta:0,just:0,tarde:0};for(const d of Object.values(S.asis)){if(d.cursoId!==cid||d.asigId!==aid||(pid&&d.perId!==pid))continue;const c=(d.reg||{})[eid];if(!c)continue;r.ses++;const t=codTipo(c);if(t==="falta")r.falta++;else if(t==="justificada")r.just++;else if(t==="tarde")r.tarde++;}r.pct=r.ses?Math.round(100*(r.ses-r.falta-r.just)/r.ses):null;return r;}
 
 /* ---------- elementos comunes ---------- */
@@ -484,18 +488,18 @@ function importar(){
 /* ---------- ASISTENCIA ---------- */
 function vAsistencia(){
  const cur=S.cursos[ctx.c],as=S.asigs[ctx.a];if(!cur||!as)return need("Necesitas un curso y una asignatura asociada a ese curso.");
- const es=estsCurso(cur.id);const k=asisKey(cur.id,as.id,UI.fecha);const d=S.asis[k];const reg=(d&&d.reg)||{};const cods=cfg().codigos;
+ const es=estsCurso(cur.id);const k=asisKey(cur.id,as.id,UI.fecha);const d=S.asis[k];const reg=(d&&d.reg)||{},ext=(d&&d.extra)||{};const cods=cfg().codigos,mcs=marcasCfg();
  const perF=periodoDeFecha(UI.fecha);const perId=perF?perF.id:ctx.p;const perN=(cfg().periodos.find(p=>p.id===perId)||{}).nombre||"";
  const cnt={};for(const e of es){const c=reg[e.id];if(c)cnt[c]=(cnt[c]||0)+1;}
  const fechas=Object.values(S.asis).filter(x=>x.cursoId===cur.id&&x.asigId===as.id&&x.perId===ctx.p).map(x=>x.fecha).sort().reverse();
  let h=`<div class="row" style="margin-bottom:10px"><h2 style="margin:0" class="sp">Asistencia</h2>${downloads?`<button class="btn sm" data-go="csvAsis">Exportar CSV</button>`:""}</div>
  <div class="card"><div class="f2"><label class="f">Fecha<input type="date" id="as_f" value="${UI.fecha}"></label><label class="f">Periodo<input type="text" value="${esc(perN)}${perF?"":" (por selección)"}" disabled></label></div>
  <label class="f">Tema de la clase<input type="text" id="as_tema" value="${esc(d&&d.tema||"")}" placeholder="Opcional"></label><label class="f">Observaciones de la clase<textarea id="as_obs" placeholder="Opcional" style="min-height:56px">${esc(d&&d.obs||"")}</textarea></label>
- <div class="row sm"><button class="btn sm" data-go="todosP">Marcar presentes a los demás</button>${d?`<button class="btn sm dan" data-go="borrarDia">Borrar este día</button>`:""}<span class="sp"></span><span class="mut">${cods.map(c=>`${esc(c.c)}: ${cnt[c.c]||0}`).join(" · ")} · Sin marcar: ${es.length-Object.keys(cnt).reduce((s,x)=>s+cnt[x],0)}</span></div></div>
- <div class="card"><div class="list">${es.length?es.map(e=>`<div class="it">${av(e,"s")}<div class="nm"><b>${esc(nomEst(e))}</b></div><div class="codes">${cods.map(c=>`<button class="cb ${codTipo(c.c)} ${reg[e.id]===c.c?"on":""}" data-mark="${e.id}" data-c="${esc(c.c)}" title="${esc(c.nombre)}">${esc(c.c)}</button>`).join("")}</div></div>`).join(""):'<div class="empty">No hay estudiantes en este curso.</div>'}</div>
- <div class="mut sm" style="margin-top:8px">${cods.map(c=>`<b>${esc(c.c)}</b> ${esc(c.nombre)}`).join(" · ")}. Los cambios se guardan solos.</div></div>`;
+ <div class="row sm"><button class="btn sm" data-go="todosP">Marcar presentes a los demás</button>${d?`<button class="btn sm dan" data-go="borrarDia">Borrar este día</button>`:""}<span class="sp"></span><span class="mut">${cods.map(c=>`${esc(c.c)}: ${cnt[c.c]||0}`).join(" · ")} · Sin marcar: ${es.length-Object.keys(cnt).reduce((s,x)=>s+cnt[x],0)}${mcs.map(m=>{const n=es.filter(e=>ext[e.id]===m.c).length;return n?` · ${esc(m.nombre)}: ${n}`:"";}).join("")}</span></div></div>
+ <div class="card"><div class="list">${es.length?es.map(e=>`<div class="it">${av(e,"s")}<div class="nm"><b>${esc(nomEst(e))}</b>${mcs.length?`<div class="mrc">${mcs.map(m=>`<button class="mb ${ext[e.id]===m.c?"on":""}" data-marca="${e.id}" data-c="${esc(m.c)}">${esc(m.nombre)}</button>`).join("")}</div>`:""}</div><div class="codes">${cods.map(c=>`<button class="cb ${codTipo(c.c)} ${reg[e.id]===c.c?"on":""}" data-mark="${e.id}" data-c="${esc(c.c)}" title="${esc(c.nombre)}">${esc(c.c)}</button>`).join("")}</div></div>`).join(""):'<div class="empty">No hay estudiantes en este curso.</div>'}</div>
+ <div class="mut sm" style="margin-top:8px">${cods.map(c=>`<b>${esc(c.c)}</b> ${esc(c.nombre)}`).join(" · ")}. ${mcs.length?` La marca de uniforme se registra aparte de la asistencia.`:""} Los cambios se guardan solos.</div></div>`;
  h+=`<div class="card"><h3>Clases registradas en ${esc((cfg().periodos.find(p=>p.id===ctx.p)||{}).nombre||"el periodo")}</h3>${fechas.length?`<div class="hist">${fechas.map(f=>`<button data-fecha="${f}" class="${f===UI.fecha?"on":""}">${fFecha(f)}</button>`).join("")}</div>`:'<div class="mut sm">Aún no hay clases registradas en este periodo.</div>'}</div>`;
- h+=`<div class="card"><h3>Consolidado del periodo</h3><div class="tw"><table class="g"><thead><tr><th class="st">Estudiante</th><th>Clases</th><th>Fallas</th><th>Justif.</th><th>Tardes</th><th>% asist.</th></tr></thead><tbody>${es.map(e=>{const r=resAsis(e.id,cur.id,as.id,ctx.p);return `<tr><td class="st">${esc(nomEst(e))}</td><td>${r.ses}</td><td style="${r.falta>=(+cfg().alertaFallas||3)?"color:var(--bad);font-weight:700":""}">${r.falta}</td><td>${r.just}</td><td>${r.tarde}</td><td>${r.pct==null?"—":r.pct+"%"}</td></tr>`;}).join("")}</tbody></table></div></div>`;
+ h+=`<div class="card"><h3>Consolidado del periodo</h3><div class="tw"><table class="g"><thead><tr><th class="st">Estudiante</th><th>Clases</th><th>Fallas</th><th>Justif.</th><th>Tardes</th><th>% asist.</th>${mcs.map(m=>`<th>${esc(m.nombre)}</th>`).join("")}</tr></thead><tbody>${es.map(e=>{const r=resAsis(e.id,cur.id,as.id,ctx.p),rm=resMarcas(e.id,cur.id,as.id,ctx.p);return `<tr><td class="st">${esc(nomEst(e))}</td><td>${r.ses}</td><td style="${r.falta>=(+cfg().alertaFallas||3)?"color:var(--bad);font-weight:700":""}">${r.falta}</td><td>${r.just}</td><td>${r.tarde}</td><td>${r.pct==null?"—":r.pct+"%"}</td>${mcs.map(m=>`<td>${rm[m.c]||0}</td>`).join("")}</tr>`;}).join("")}</tbody></table></div></div>`;
  return h;
 }
 function asisDoc(){return asisDocFor(ctx.c,ctx.a,UI.fecha);}
@@ -668,7 +672,7 @@ function vAjustes(){
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Estructura de la nota</h3><button class="btn sm" data-go="plantilla">Editar</button></div><div class="row" style="margin-top:6px">${(cfg().plantilla||_def.plantilla).map(k=>`<span class="tag">${esc(k.nombre)} ${esc(k.peso)}%</span>`).join("")}</div><div class="sm mut" style="margin-top:6px">Se usa al crear asignaturas; cada asignatura puede ajustarse aparte.</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Periodos académicos</h3><button class="btn sm" data-go="periodos">Editar</button></div>${sumP!==100?`<div class="banner" style="margin:8px 0 0">Los pesos suman ${sumP}%. El acumulado se normaliza, pero conviene que sumen 100%.</div>`:""}<div class="list">${c.periodos.map(p=>`<div class="it"><div class="nm"><b>${esc(p.nombre)}</b><span class="mut sm">${p.inicio?fFecha(p.inicio)+" a "+fFecha(p.fin):"Sin fechas"}</span></div><span class="tag">${esc(p.peso)}%</span></div>`).join("")}</div></div>
  <div class="card"><div class="row"><h3 class="sp" style="margin:0">Escala de valoración</h3><button class="btn sm" data-go="escala">Editar</button></div><div class="sm" style="margin-top:6px">De ${esc(E.min)} a ${esc(E.max)} · aprueba con ${esc(E.aprob)} · ${esc(E.dec)} decimal(es)</div><div class="row" style="margin-top:6px">${niveles().map(d=>`<span class="dtag"><i style="background:${d.color}"></i>${esc(d.nombre)} ${esc(d.desde)}–${esc(d.hasta)}</span>`).join("")}</div></div>
- <div class="card"><div class="row"><h3 class="sp" style="margin:0">Códigos de asistencia</h3><button class="btn sm" data-go="codigos">Editar</button></div><div class="row" style="margin-top:6px">${c.codigos.map(x=>`<span class="tag">${esc(x.c)} · ${esc(x.nombre)} (${esc(TIPOS[x.tipo]||x.tipo)})</span>`).join("")}</div></div>
+ <div class="card"><div class="row"><h3 class="sp" style="margin:0">Códigos de asistencia</h3><button class="btn sm" data-go="codigos">Editar</button></div><div class="row" style="margin-top:6px">${c.codigos.map(x=>`<span class="tag">${esc(x.c)} · ${esc(x.nombre)} (${esc(TIPOS[x.tipo]||x.tipo)})</span>`).join("")}</div>${marcasCfg().length?`<div class="sm mut" style="margin-top:6px">Marcas adicionales: ${marcasCfg().map(m=>esc(m.nombre)).join(", ")}</div>`:""}</div>
  <div class="card"><h3>Instalar en el dispositivo</h3><div class="sm mut">${instEv?"Este navegador permite instalar Aula Docente como aplicación, con su propio ícono.":window.matchMedia("(display-mode: standalone)").matches?"Ya estás usando la aplicación instalada.":"En Android abre esta página en Chrome y elige ⋮ → Instalar aplicación. En iPhone, en Safari: Compartir → Agregar a inicio."}</div>${instEv?`<div class="row" style="margin-top:8px"><button class="btn sm pri" data-go="instalar">Instalar aplicación</button></div>`:""}</div>
  <div class="card"><h3>Google Drive</h3><div class="sm">${c.drive&&c.drive.rootId?`Carpeta principal creada. <a href="https://drive.google.com/drive/folders/${esc(c.drive.rootId)}" target="_blank" rel="noopener">Abrir en Drive</a> · ${Object.keys(c.drive.carpetas||{}).length} subcarpeta(s) por curso y asignatura.`:"La carpeta se crea automáticamente con la primera evidencia que subas."}</div><div class="row" style="margin-top:8px">${driveOn()?`<button class="btn sm" data-go="probarDrive">Conectar y crear carpeta</button>`:`<span class="mut sm">Google Drive no está configurado (falta GOOGLE_CLIENT_ID en config.js).</span>`}${c.drive&&c.drive.rootId?`<button class="btn sm dan" data-go="resetDrive">Olvidar carpetas</button>`:""}</div></div>
  <div class="card"><h3>Copia de seguridad</h3><div class="sm mut">Descarga todos tus registros (incluidas las fotografías) en un archivo .json o restaura uno anterior.</div><div class="row" style="margin-top:8px">${downloads?`<button class="btn sm" data-go="backup">Descargar copia</button>`:""}<label class="btn sm">Restaurar copia<input type="file" accept=".json,application/json" id="restore" hidden></label></div></div>`;
@@ -719,8 +723,9 @@ function formEscala(){const E=cfg().escala;const re=rowsEd(niveles(),[{k:"color"
  <div class="f">Desempeños</div>${re.html}<div class="ft"><button class="btn pri" id="e_ok">Guardar</button></div>`,sh=>{re.mount(sh);$("#e_ok",sh).onclick=async()=>{const o={min:+$("#e_min").value,max:+$("#e_max").value,aprob:+$("#e_ap").value,dec:+$("#e_dec").value,desempenos:re.read().filter(d=>d.nombre).map(d=>({nombre:d.nombre,desde:+d.desde,hasta:+d.hasta,color:d.color}))};
   if(!(o.max>o.min)||o.aprob<o.min||o.aprob>o.max)return toast("Revisa la escala: la máxima debe superar a la mínima y la aprobatoria estar entre ambas.",true);await saveCfg({escala:o});closeModal();toast("Escala guardada");};});}
 function formCodigos(){const re=rowsEd(cfg().codigos,[{k:"c",l:"Código",w:70},{k:"nombre",l:"Significado"},{k:"tipo",l:"Cuenta como",opts:TIPOS}],()=>({c:"",nombre:"",tipo:"registro"}));
- openModal(`<div class="hd"><h3>Códigos de asistencia</h3><button class="x" data-close>×</button></div><p class="sm mut">Crea los códigos que uses (por ejemplo, R para retiro anticipado o AI para actividad institucional) y define cómo cuentan en el consolidado.</p>${re.html}<div class="ft"><button class="btn pri" id="k_ok">Guardar</button></div>`,sh=>{re.mount(sh);$("#k_ok",sh).onclick=async()=>{const k=re.read().filter(x=>x.c).map(x=>({c:x.c.toUpperCase().slice(0,4),nombre:x.nombre||x.c,tipo:x.tipo}));
-  if(!k.some(x=>x.tipo==="presente"))return toast("Debe haber al menos un código de tipo Presente.",true);if(new Set(k.map(x=>x.c)).size!==k.length)return toast("Hay códigos repetidos.",true);await saveCfg({codigos:k});closeModal();toast("Códigos guardados");};});}
+ const rm=rowsEd(marcasCfg(),[{k:"c",l:"Código",w:70},{k:"nombre",l:"Marca"}],()=>({c:"",nombre:""}));
+ openModal(`<div class="hd"><h3>Códigos de asistencia</h3><button class="x" data-close>×</button></div><p class="sm mut">Crea los códigos que uses (por ejemplo, R para retiro anticipado o AI para actividad institucional) y define cómo cuentan en el consolidado.</p>${re.html}<h3 style="margin-top:16px">Marcas adicionales</h3><p class="sm mut">Se registran al mismo tiempo que la asistencia y no la afectan (por ejemplo, Sin uniforme y Excusa de uniforme). En cada estudiante se elige una de ellas o ninguna. Déjalas vacías si no las usas.</p>${rm.html}<div class="ft"><button class="btn pri" id="k_ok">Guardar</button></div>`,sh=>{re.mount(sh);rm.mount(sh);$("#k_ok",sh).onclick=async()=>{const mk=rm.read().filter(x=>x.nombre).map(x=>({c:(x.c||x.nombre.slice(0,2)).toUpperCase().slice(0,4),nombre:x.nombre}));if(new Set(mk.map(x=>x.c)).size!==mk.length)return toast("Hay marcas con el mismo código.",true);const k=re.read().filter(x=>x.c).map(x=>({c:x.c.toUpperCase().slice(0,4),nombre:x.nombre||x.c,tipo:x.tipo}));
+  if(!k.some(x=>x.tipo==="presente"))return toast("Debe haber al menos un código de tipo Presente.",true);if(new Set(k.map(x=>x.c)).size!==k.length)return toast("Hay códigos repetidos.",true);await saveCfg({codigos:k,marcas:mk});closeModal();toast("Códigos guardados");};});}
 
 /* ---------- exportaciones ---------- */
 const csvC=v=>{const s=String(v??"");return /[;"\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
@@ -732,8 +737,8 @@ function csvNotas(){const cur=S.cursos[ctx.c],as=S.asigs[ctx.a],per=cfg().period
  for(const e of estsCurso(cur.id)){const n=notaPer(e.id,cur.id,as.id,per.id),ac=notaAcum(e.id,cur.id,as.id);rows.push([e.documento||"",e.apellidos||"",e.nombres||"",...acts.map(a=>{const v=notaAct(a.id,e.id);return v==null?"":fmt(v).replace(".",",");}),...cs.map(c=>{const m=promComp(e.id,acts,c.id);return m==null?"":fmt(m).replace(".",",");}),n==null?"":fmt(n).replace(".",","),desemp(n),ac==null?"":fmt(ac).replace(".",",")]);}
  bajar(`Notas_${slug(cur.nombre)}_${slug(as.nombre)}_${slug(per.nombre)}.csv`,csv(rows));}
 function csvAsis(){const cur=S.cursos[ctx.c],as=S.asigs[ctx.a],per=cfg().periodos.find(p=>p.id===ctx.p);const ds=Object.values(S.asis).filter(x=>x.cursoId===cur.id&&x.asigId===as.id&&x.perId===per.id).sort((a,b)=>a.fecha.localeCompare(b.fecha));
- const rows=[["Documento","Apellidos","Nombres",...ds.map(d=>fFecha(d.fecha)),"Clases","Fallas","Justificadas","Tardes","% asistencia"]];
- for(const e of estsCurso(cur.id)){const r=resAsis(e.id,cur.id,as.id,per.id);rows.push([e.documento||"",e.apellidos||"",e.nombres||"",...ds.map(d=>(d.reg||{})[e.id]||""),r.ses,r.falta,r.just,r.tarde,r.pct==null?"":r.pct]);}
+ const rows=[["Documento","Apellidos","Nombres",...ds.map(d=>fFecha(d.fecha)),"Clases","Fallas","Justificadas","Tardes","% asistencia",...marcasCfg().map(m=>m.nombre)]];
+ for(const e of estsCurso(cur.id)){const r=resAsis(e.id,cur.id,as.id,per.id);const rm=resMarcas(e.id,cur.id,as.id,per.id);rows.push([e.documento||"",e.apellidos||"",e.nombres||"",...ds.map(d=>[(d.reg||{})[e.id],(d.extra||{})[e.id]].filter(Boolean).join("+")),r.ses,r.falta,r.just,r.tarde,r.pct==null?"":r.pct,...marcasCfg().map(m=>rm[m.c]||0)]);}
  bajar(`Asistencia_${slug(cur.nombre)}_${slug(as.nombre)}_${slug(per.nombre)}.csv`,csv(rows));}
 function backup(){const o={app:"aula-docente",version:1,fecha:new Date().toISOString(),cfg:cfg()};for(const k of Object.keys(COL))o[k]=Object.values(S[k]);bajar(`Aula_Docente_copia_${hoy()}.json`,JSON.stringify(o));}
 async function restaurar(file){let o;try{o=JSON.parse(await file.text());}catch(e){return toast("El archivo no es una copia válida.",true);}
@@ -751,7 +756,7 @@ function ask(msg,ok="Confirmar",danger){return new Promise(res=>{$("#cfs").inner
 
 /* ---------- eventos de la vista ---------- */
 $("#main").addEventListener("click",async e=>{
- const t=e.target.closest("[data-qact],[data-week],[data-slot],[data-cod],[data-quitar],[data-pub],[data-go],[data-est],[data-mark],[data-fecha],[data-evact],[data-act],[data-evid],[data-curso],[data-asig],[data-evp]");if(!t)return;
+ const t=e.target.closest("[data-marca],[data-qact],[data-week],[data-slot],[data-cod],[data-quitar],[data-pub],[data-go],[data-est],[data-mark],[data-fecha],[data-evact],[data-act],[data-evid],[data-curso],[data-asig],[data-evp]");if(!t)return;
  const d=t.dataset;
  if(d.qact){crearCasilla(d.qact);return;}
  if(d.week!=null){UI.semana=+d.week===0?lunesDe(hoy()):addD(UI.semana||lunesDe(hoy()),+d.week);renderMain();return;}
@@ -759,6 +764,8 @@ $("#main").addEventListener("click",async e=>{
  if(d.cod){accionCodigo(d.cod,t);return;}
  if(d.quitar){quitarAcceso(d.quitar);return;}
  if(d.pub){formPub(AV.pubs.find(x=>x.id===d.pub));return;}
+ if(d.marca){const doc=asisDoc();if(doc.extra[d.marca]===d.c)delete doc.extra[d.marca];else doc.extra[d.marca]=d.c;queueSave("asis",doc.id,500);
+  $$(`[data-marca="${d.marca}"]`).forEach(b=>b.classList.toggle("on",b.dataset.c===doc.extra[d.marca]));return;}
  if(d.mark){const doc=asisDoc();if(doc.reg[d.mark]===d.c)delete doc.reg[d.mark];else doc.reg[d.mark]=d.c;queueSave("asis",doc.id,500);
   $$(`[data-mark="${d.mark}"]`).forEach(b=>b.classList.toggle("on",b.dataset.c===doc.reg[d.mark]));return;}
  if(d.fecha){UI.fecha=d.fecha;renderMain();return;}
@@ -843,7 +850,7 @@ function calendarioHTML(){
  return h;
 }
 function asisDocFor(cid,aid,f){const k=asisKey(cid,aid,f);const p=periodoDeFecha(f);
- if(!S.asis[k])S.asis[k]={id:k,cursoId:cid,asigId:aid,fecha:f,perId:p?p.id:ctx.p,tema:"",obs:"",reg:{}};else S.asis[k]={...S.asis[k],reg:{...(S.asis[k].reg||{})}};return S.asis[k];}
+ if(!S.asis[k])S.asis[k]={id:k,cursoId:cid,asigId:aid,fecha:f,perId:p?p.id:ctx.p,tema:"",obs:"",reg:{},extra:{}};else S.asis[k]={...S.asis[k],reg:{...(S.asis[k].reg||{})},extra:{...(S.asis[k].extra||{})}};return S.asis[k];}
 function irA(vista,cid,aid,f){ctx.c=cid;ctx.a=aid;if(f){UI.fecha=f;const p=periodoDeFecha(f);if(p)ctx.p=p.id;}lsSet("ctx",ctx);closeModal();renderCtx();if(location.hash==="#"+vista){readHash();renderMain();}else location.hash=vista;}
 function panelClase(sid,f){
  const s=(cfg().horario||[]).find(x=>x.id===sid);if(!s)return;const c=S.cursos[s.cursoId],a=S.asigs[s.asigId];if(!c||!a)return;
